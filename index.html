@@ -92,6 +92,20 @@
   <body class="min-h-screen text-white selection:bg-purple-500 selection:text-white">
     <div hidden=""><!--$?--><template id="B:0"></template><!--/$--></div>
     <script>
+      /* Registered synchronously here — before any async/defer scripts (Next.js router)
+         can register their own handlers. Capture phase fires before bubble, and
+         document-level capture registered first wins in registration order. */
+      document.addEventListener('click', function(e) {
+        var a = e.target.closest('a[href]');
+        if (!a) return;
+        if (!a.closest('[data-orwyx-injected], #orwyx-mobile-menu')) return;
+        var href = a.href;
+        if (!href || href.charAt(0) === '#') return;
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = href;
+      }, true);
+
       /* Inject header + set favicon after React hydration */
       window.addEventListener('load', function() {
         /* favicon — override React's injected icon */
