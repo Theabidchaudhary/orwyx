@@ -535,7 +535,7 @@ private fun PlayerControls(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, top = 4.dp, bottom = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 6.dp),
                 ) {
                     Text(
                         "${formatSpeed(state.speed)}×",

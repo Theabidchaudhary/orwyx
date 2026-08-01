@@ -46,9 +46,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk orwyx-player-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk orwyx-player.apk
           gh release delete apk-latest --yes --cleanup-tag || true
-          gh release create apk-latest orwyx-player-debug.apk \
+          gh release create apk-latest orwyx-player.apk \
             --title "Orwyx Player debug APK" \
             --notes "Debug build of Orwyx Player from commit ${GITHUB_SHA}. Install requires allowing unknown sources." \
             --prerelease \
