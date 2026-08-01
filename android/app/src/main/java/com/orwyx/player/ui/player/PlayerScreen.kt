@@ -4,11 +4,14 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -16,6 +19,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +41,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BrightnessMedium
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -48,13 +53,14 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -329,12 +335,18 @@ fun PlayerScreen(
             )
         }
 
-        // Long-press speed: minimal, no background — must never sit on top of controls.
+        // Long-press speed: minimal, no background. Rises toward the top edge when
+        // the rest of the UI is hidden so it never sits over the middle of the frame.
+        val holdSpeedTopPadding by animateDpAsState(
+            targetValue = if (state.controlsVisible) 64.dp else 12.dp,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
+            label = "holdSpeedTopPadding",
+        )
         AnimatedVisibility(
             visible = state.holdSpeedActive,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 64.dp),
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = holdSpeedTopPadding),
         ) {
             HoldSpeedHud(state.holdSpeedValue)
         }
@@ -491,24 +503,13 @@ private fun PlayerControls(
                 }
             }
 
-            // Speed: compact, always-visible slider — left side, below the title.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 12.dp, top = 2.dp),
-            ) {
-                Text(
-                    "${"%.2f".format(state.speed).trimEnd('0').trimEnd('.')}×",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = white,
-                    modifier = Modifier.padding(end = 8.dp),
-                )
-                Slider(
-                    value = state.speed,
-                    onValueChange = viewModel::setSpeed,
-                    valueRange = 0.25f..3f,
-                    modifier = Modifier.width(120.dp).height(24.dp),
-                )
-            }
+            // Speed: a low-opacity pill showing the current speed, left side below the
+            // title. Tapping it expands into a snap-to-0.5x slider.
+            SpeedControl(
+                speed = state.speed,
+                onSpeedChange = viewModel::setSpeed,
+                modifier = Modifier.padding(start = 12.dp, top = 4.dp),
+            )
         }
     }
 
@@ -528,11 +529,10 @@ private fun PlayerControls(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(Formatters.duration(displayPositionMs), style = MaterialTheme.typography.labelMedium, color = white)
-                    Slider(
-                        value = displayPositionMs.toFloat().coerceIn(0f, state.durationMs.toFloat().coerceAtLeast(1f)),
-                        onValueChange = { onScrub(it.toLong()) },
-                        onValueChangeFinished = onScrubFinished,
-                        valueRange = 0f..state.durationMs.toFloat().coerceAtLeast(1f),
+                    ThinSeekBar(
+                        progress = displayPositionMs.toFloat() / state.durationMs.toFloat().coerceAtLeast(1f),
+                        onSeek = { fraction -> onScrub((fraction * state.durationMs).toLong()) },
+                        onSeekFinished = onScrubFinished,
                         modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                     )
                     Text(Formatters.duration(state.durationMs), style = MaterialTheme.typography.labelMedium, color = white)
@@ -545,8 +545,8 @@ private fun PlayerControls(
                     IconButton(onClick = { viewModel.setLocked(true) }) {
                         Icon(Icons.Filled.LockOpen, "Lock", tint = white)
                     }
-                    IconButton(onClick = { viewModel.seekBy(-(settings?.seekStepSeconds ?: 10) * 1000L) }) {
-                        Icon(Icons.Filled.Replay10, "Back 10s", tint = white, modifier = Modifier.size(30.dp))
+                    IconButton(onClick = viewModel::previous) {
+                        Icon(Icons.Filled.SkipPrevious, "Previous", tint = white, modifier = Modifier.size(30.dp))
                     }
                     IconButton(onClick = viewModel::togglePlayPause, modifier = Modifier.size(68.dp)) {
                         Icon(
@@ -556,8 +556,8 @@ private fun PlayerControls(
                             modifier = Modifier.size(52.dp),
                         )
                     }
-                    IconButton(onClick = { viewModel.seekBy((settings?.seekStepSeconds ?: 10) * 1000L) }) {
-                        Icon(Icons.Filled.Forward10, "Forward 10s", tint = white, modifier = Modifier.size(30.dp))
+                    IconButton(onClick = viewModel::next) {
+                        Icon(Icons.Filled.SkipNext, "Next", tint = white, modifier = Modifier.size(30.dp))
                     }
                     IconButton(onClick = {
                         val next = ZoomMode.entries[(state.zoomMode.ordinal + 1) % ZoomMode.entries.size]
@@ -638,31 +638,89 @@ private fun SeekBurst(seconds: Int, forward: Boolean, key: Int) {
 /** Speed slider shown while a long-press hold is active — no background, so it never masks the video. */
 @Composable
 private fun HoldSpeedHud(value: Float) {
+    val range = PlayerViewModel.HOLD_SPEED_RANGE
+    val stepCount = ((range.endInclusive - range.start) / PlayerViewModel.HOLD_SPEED_STEP).roundToInt()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            "${"%.2f".format(value)}×",
+            "${formatSpeed(value)}×",
             style = MaterialTheme.typography.titleMedium,
             color = Color.White,
         )
-        val fraction = ((value - 0.25f) / (3f - 0.25f)).coerceIn(0f, 1f)
-        Box(
-            modifier = Modifier
-                .padding(top = 6.dp)
-                .width(160.dp)
-                .height(3.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Color(0x40FFFFFF)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(fraction)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.primary),
-            )
+        val fraction = ((value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+        SnapTicks(
+            count = stepCount + 1,
+            fraction = fraction,
+            modifier = Modifier.padding(top = 8.dp).width(180.dp),
+        )
+    }
+}
+
+/** Low-opacity round pill showing the current speed; tap to expand into a snap-to-0.5x slider. */
+@Composable
+private fun SpeedControl(speed: Float, onSpeedChange: (Float) -> Unit, modifier: Modifier = Modifier) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        AnimatedContent(
+            targetState = expanded,
+            transitionSpec = {
+                (fadeIn(tween(160)) + scaleIn(initialScale = 0.85f))
+                    .togetherWith(fadeOut(tween(120)) + scaleOut(targetScale = 0.85f))
+            },
+            label = "speedControl",
+        ) { isExpanded ->
+            if (!isExpanded) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x33FFFFFF))
+                        .clickable { expanded = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("${formatSpeed(speed)}×", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .background(Color(0x99000000), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        "${formatSpeed(speed)}×",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(end = 10.dp),
+                    )
+                    DottedSnapSlider(
+                        value = speed,
+                        range = SPEED_RANGE,
+                        step = SPEED_STEP,
+                        onValueChange = onSpeedChange,
+                        modifier = Modifier.width(150.dp),
+                    )
+                    IconButton(onClick = { expanded = false }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Filled.Check, "Done", tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
         }
     }
 }
+
+private fun formatSpeed(value: Float): String {
+    val text = "%.2f".format(value).trimEnd('0').trimEnd('.')
+    return text.ifEmpty { "0" }
+}
+
+/**
+ * Playback speed only supports forward, positive rates — ExoPlayer's
+ * PlaybackParameters has no concept of reverse playback, so the slider's
+ * lower bound stops at 0.5x rather than the originally requested -2x.
+ */
+private val SPEED_RANGE = 0.5f..4f
+private const val SPEED_STEP = 0.5f
 
 private fun zoomModeLabel(mode: ZoomMode): String = when (mode) {
     ZoomMode.FIT -> "Fit"

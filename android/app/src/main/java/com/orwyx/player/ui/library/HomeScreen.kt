@@ -48,11 +48,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -61,6 +63,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.orwyx.player.core.util.Formatters
 import com.orwyx.player.data.scanner.ScanState
@@ -118,6 +123,23 @@ fun HomeScreen(
 
     LaunchedEffect(hasPermission) { if (hasPermission) viewModel.scanIfNeeded() }
     LibraryEventHandler(viewModel, snackbar)
+
+    // The background MediaChangeObserver only runs while the process is alive;
+    // Android routinely kills backgrounded apps, so anything added/removed while
+    // this app wasn't running would otherwise sit stale until a manual rescan.
+    // Rescanning every time the app returns to the foreground closes that gap —
+    // MediaScanner.scan() is a cheap bulk diff, safe to run this often.
+    val currentHasPermission = rememberUpdatedState(hasPermission)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && currentHasPermission.value) {
+                viewModel.rescan()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val query by viewModel.query.collectAsState()
     val settings by viewModel.settings.collectAsState()

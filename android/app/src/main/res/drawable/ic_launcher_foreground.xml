@@ -4,8 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Minimal rounded play glyph, offset slightly right for optical centering. -->
+    <!-- Indigo disc so the glyph reads clearly regardless of the launcher's adaptive-icon mask. -->
+    <path
+        android:fillColor="#FF5B7FFF"
+        android:pathData="M54,24 A30,30 0 1 1 53.99,24 Z" />
+    <!-- Play triangle, centroid-aligned to the 108 viewport's exact center (54,54). -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M45,38.8 C45,36.5 47.5,35 49.5,36.2 L76.5,53.4 C78.4,54.6 78.4,57.4 76.5,58.6 L49.5,75.8 C47.5,77 45,75.5 45,73.2 Z" />
+        android:pathData="M42,34 L78,54 L42,74 Z" />
 </vector>

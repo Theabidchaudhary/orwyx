@@ -122,9 +122,16 @@ class PlayerEngine @Inject constructor(
     /**
      * Applies (or clears) the enhancement pipeline. Returns false when the device
      * can't run GL effects, so the UI can disable the toggle gracefully.
+     *
+     * A no-op seek forces the frame processor to re-render the current frame
+     * through the new effect chain immediately — without it the change only
+     * becomes visible after the next natural seek or media transition.
      */
     fun setVideoEffects(effects: List<Effect>): Boolean =
-        runCatching { player?.setVideoEffects(effects) }.isSuccess
+        runCatching {
+            player?.setVideoEffects(effects)
+            player?.let { it.seekTo(it.currentPosition) }
+        }.isSuccess
 
     /** Audio delay requires a pipeline flush to take effect immediately. */
     fun setAudioDelay(delayMs: Long) {

@@ -306,10 +306,12 @@ class PlayerViewModel @Inject constructor(
     /** [normalizedDeltaX] is the horizontal drag delta as a fraction of screen width. */
     fun dragHoldSpeed(normalizedDeltaX: Float) {
         holdDragAccum += normalizedDeltaX
-        val newSpeed = (HOLD_INITIAL_SPEED + holdDragAccum * HOLD_DRAG_SENSITIVITY)
-            .coerceIn(0.25f, 3f)
-        engine.setSpeed(newSpeed)
-        _state.value = _state.value.copy(holdSpeedValue = newSpeed)
+        val raw = (HOLD_INITIAL_SPEED + holdDragAccum * HOLD_DRAG_SENSITIVITY)
+            .coerceIn(HOLD_SPEED_RANGE.start, HOLD_SPEED_RANGE.endInclusive)
+        val snapped = (Math.round(raw / HOLD_SPEED_STEP) * HOLD_SPEED_STEP)
+            .coerceIn(HOLD_SPEED_RANGE.start, HOLD_SPEED_RANGE.endInclusive)
+        engine.setSpeed(snapped)
+        _state.value = _state.value.copy(holdSpeedValue = snapped)
     }
 
     fun endHoldSpeed() {
@@ -466,9 +468,11 @@ class PlayerViewModel @Inject constructor(
             .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
             .build()
 
-    private companion object {
+    companion object {
         const val HOLD_INITIAL_SPEED = 2f
         /** Full screen-width drag shifts the speed by roughly this many multiples. */
         const val HOLD_DRAG_SENSITIVITY = 4f
+        const val HOLD_SPEED_STEP = 0.5f
+        val HOLD_SPEED_RANGE = 0.5f..3f
     }
 }

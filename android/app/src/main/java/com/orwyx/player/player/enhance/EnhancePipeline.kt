@@ -6,12 +6,19 @@ import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
 import androidx.media3.effect.HslAdjustment
 
-/** User-facing enhancement toggles (all off by default). */
+/**
+ * User-facing enhancement toggle (all off by default).
+ *
+ * Tuned for a clearly visible "auto enhance" look on a single tap — punchier
+ * contrast and saturation plus a small lift, similar to a photo app's
+ * one-tap auto-enhance. No manual controls are exposed; these constants are
+ * the whole feature.
+ */
 data class EnhanceSettings(
     val enabled: Boolean = false,
-    val contrastBoost: Float = 0.15f, // -1..1
-    val colorBoost: Float = 12f, // saturation delta, -100..100
-    val brightnessLift: Float = 0.02f, // -1..1
+    val contrastBoost: Float = 0.35f, // -1..1
+    val colorBoost: Float = 32f, // saturation delta, -100..100
+    val brightnessLift: Float = 0.05f, // -1..1
     val skinToneWarmth: Float = 4f, // hue-band saturation lift
 ) {
     companion object {
