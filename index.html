@@ -111,6 +111,19 @@
           var frag = document.createDocumentFragment();
           while (d.firstChild) frag.appendChild(d.firstChild);
           document.body.insertBefore(frag, document.body.firstChild);
+          /* React intercepts clicks via event delegation — capture-phase listener
+             fires first and forces native navigation before React can hijack it. */
+          var injectedNav = document.querySelector('[data-orwyx-injected]');
+          if (injectedNav) {
+            injectedNav.addEventListener('click', function(e) {
+              var a = e.target.closest('a[href]');
+              if (a) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.location.href = a.href;
+              }
+            }, true);
+          }
         });
       });
     </script>
