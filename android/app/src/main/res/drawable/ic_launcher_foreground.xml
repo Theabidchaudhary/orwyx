@@ -4,11 +4,9 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Indigo disc so the glyph reads clearly regardless of the launcher's adaptive-icon mask. -->
-    <path
-        android:fillColor="#FF5B7FFF"
-        android:pathData="M54,24 A30,30 0 1 1 53.99,24 Z" />
-    <!-- Play triangle, centroid-aligned to the 108 viewport's exact center (54,54). -->
+    <!-- Just the play glyph — the indigo background layer (ic_launcher_background)
+         is the icon's only shape, so there's no second circle competing with it.
+         Triangle vertices are centroid-aligned to the 108 viewport's exact center (54,54). -->
     <path
         android:fillColor="#FFFFFFFF"
         android:pathData="M42,34 L78,54 L42,74 Z" />

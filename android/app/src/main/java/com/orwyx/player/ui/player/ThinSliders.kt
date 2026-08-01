@@ -112,8 +112,19 @@ fun ThinSeekBar(
 }
 
 /**
- * A slider that snaps to fixed [step] increments across [range], with a small
- * tick dot rendered at every step — used for playback speed controls.
+ * Continuous value with a small magnetic pull toward the nearest [step]
+ * multiple: smooth everywhere in between, but locks onto the dot once [raw]
+ * lands within [threshold] of it.
+ */
+fun magnetSnap(raw: Float, step: Float, threshold: Float = step * 0.12f): Float {
+    val nearest = (raw / step).roundToInt() * step
+    return if (kotlin.math.abs(raw - nearest) <= threshold) nearest else raw
+}
+
+/**
+ * A smooth-sliding control across [range] with a tick dot at every [step] and
+ * a small magnetic snap when the finger lands close to one — used for
+ * playback speed controls.
  */
 @Composable
 fun DottedSnapSlider(
@@ -127,8 +138,7 @@ fun DottedSnapSlider(
 
     fun snap(fraction: Float): Float {
         val raw = range.start + fraction.coerceIn(0f, 1f) * (range.endInclusive - range.start)
-        val snapped = (raw / step).roundToInt() * step
-        return snapped.coerceIn(range.start, range.endInclusive)
+        return magnetSnap(raw, step).coerceIn(range.start, range.endInclusive)
     }
 
     BoxWithConstraints(
@@ -169,7 +179,7 @@ fun DottedSnapSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             repeat(stepCount + 1) {
-                Box(Modifier.size(4.dp).clip(CircleShape).background(Color(0x99FFFFFF)))
+                Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0x99FFFFFF)))
             }
         }
         Box(
@@ -208,7 +218,7 @@ fun SnapTicks(count: Int, fraction: Float, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             repeat(count) {
-                Box(Modifier.size(4.dp).clip(CircleShape).background(Color(0x99FFFFFF)))
+                Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0x99FFFFFF)))
             }
         }
         Box(

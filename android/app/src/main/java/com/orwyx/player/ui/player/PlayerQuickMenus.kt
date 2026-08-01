@@ -49,16 +49,22 @@ import com.orwyx.player.player.audio.AudioFxController
  * bottom sheet.
  */
 @Composable
-fun AudioQuickMenu(viewModel: PlayerViewModel, state: PlayerUiState, tint: Color) {
+fun AudioQuickMenu(
+    viewModel: PlayerViewModel,
+    state: PlayerUiState,
+    tint: Color,
+    onExpandedChange: (Boolean) -> Unit = {},
+) {
     var expanded by remember { mutableStateOf(false) }
+    fun setExpanded(value: Boolean) { expanded = value; onExpandedChange(value) }
     val fx by viewModel.audioFx.state.collectAsState()
     var mono by rememberSaveable { mutableStateOf(false) }
 
     Box {
-        IconButton(onClick = { expanded = true }) {
+        IconButton(onClick = { setExpanded(true) }) {
             Icon(Icons.AutoMirrored.Filled.VolumeUp, "Audio", tint = tint)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
             if (state.audioTracks.size > 1) {
                 state.audioTracks.forEach { track ->
                     DropdownMenuItem(
@@ -66,7 +72,7 @@ fun AudioQuickMenu(viewModel: PlayerViewModel, state: PlayerUiState, tint: Color
                         leadingIcon = {
                             if (track.selected) Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary)
                         },
-                        onClick = { viewModel.selectTrack(track); expanded = false },
+                        onClick = { viewModel.selectTrack(track); setExpanded(false) },
                         modifier = Modifier.widthIn(max = 240.dp),
                     )
                 }
@@ -94,8 +100,15 @@ fun AudioQuickMenu(viewModel: PlayerViewModel, state: PlayerUiState, tint: Color
 }
 
 @Composable
-fun CaptionsQuickMenu(viewModel: PlayerViewModel, state: PlayerUiState, settings: AppSettings?, tint: Color) {
+fun CaptionsQuickMenu(
+    viewModel: PlayerViewModel,
+    state: PlayerUiState,
+    settings: AppSettings?,
+    tint: Color,
+    onExpandedChange: (Boolean) -> Unit = {},
+) {
     var expanded by remember { mutableStateOf(false) }
+    fun setExpanded(value: Boolean) { expanded = value; onExpandedChange(value) }
     val session by viewModel.subtitleManager.session.collectAsState()
     val active = session.track != null || state.textTracks.any { it.selected }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -104,14 +117,14 @@ fun CaptionsQuickMenu(viewModel: PlayerViewModel, state: PlayerUiState, settings
     }
 
     Box {
-        IconButton(onClick = { expanded = true }) {
+        IconButton(onClick = { setExpanded(true) }) {
             Icon(Icons.Filled.Subtitles, "Captions", tint = if (active) MaterialTheme.colorScheme.primary else tint)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
             DropdownMenuItem(
                 text = { Text("Off") },
                 leadingIcon = { if (!active) Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary) },
-                onClick = { viewModel.disableTextTracks(); expanded = false },
+                onClick = { viewModel.disableTextTracks(); setExpanded(false) },
             )
             state.textTracks.forEach { track ->
                 DropdownMenuItem(
@@ -119,7 +132,7 @@ fun CaptionsQuickMenu(viewModel: PlayerViewModel, state: PlayerUiState, settings
                     leadingIcon = {
                         if (track.selected) Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary)
                     },
-                    onClick = { viewModel.selectTrack(track); expanded = false },
+                    onClick = { viewModel.selectTrack(track); setExpanded(false) },
                     modifier = Modifier.widthIn(max = 240.dp),
                 )
             }
@@ -128,7 +141,7 @@ fun CaptionsQuickMenu(viewModel: PlayerViewModel, state: PlayerUiState, settings
                     text = { Text(path.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     onClick = {
                         settings?.let { viewModel.loadSubtitleFromPath(path, it.subtitleEncoding) }
-                        expanded = false
+                        setExpanded(false)
                     },
                     modifier = Modifier.widthIn(max = 240.dp),
                 )
@@ -136,7 +149,7 @@ fun CaptionsQuickMenu(viewModel: PlayerViewModel, state: PlayerUiState, settings
             DropdownMenuItem(
                 text = { Text("Open file…") },
                 leadingIcon = { Icon(Icons.Filled.FileOpen, null) },
-                onClick = { expanded = false; picker.launch(arrayOf("*/*")) },
+                onClick = { setExpanded(false); picker.launch(arrayOf("*/*")) },
             )
             if (session.track != null) {
                 HorizontalDivider()
@@ -162,16 +175,17 @@ fun CaptionsQuickMenu(viewModel: PlayerViewModel, state: PlayerUiState, settings
 }
 
 @Composable
-fun SleepQuickMenu(viewModel: PlayerViewModel, tint: Color) {
+fun SleepQuickMenu(viewModel: PlayerViewModel, tint: Color, onExpandedChange: (Boolean) -> Unit = {}) {
     var expanded by remember { mutableStateOf(false) }
+    fun setExpanded(value: Boolean) { expanded = value; onExpandedChange(value) }
     val timerState by viewModel.sleepTimerState.collectAsState()
     val active = timerState !is SleepTimerState.Off
 
     Box {
-        IconButton(onClick = { expanded = true }) {
+        IconButton(onClick = { setExpanded(true) }) {
             Icon(Icons.Filled.Bedtime, "Sleep timer", tint = if (active) MaterialTheme.colorScheme.primary else tint)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
             (timerState as? SleepTimerState.Running)?.let { running ->
                 Text(
                     "Pausing in ${Formatters.duration(running.remainingMs)}",
@@ -184,17 +198,17 @@ fun SleepQuickMenu(viewModel: PlayerViewModel, tint: Color) {
             listOf(5, 10, 15, 30, 45, 60).forEach { minutes ->
                 DropdownMenuItem(
                     text = { Text("$minutes min") },
-                    onClick = { viewModel.sleepTimer.start(minutes * 60_000L); expanded = false },
+                    onClick = { viewModel.sleepTimer.start(minutes * 60_000L); setExpanded(false) },
                 )
             }
             DropdownMenuItem(
                 text = { Text("End of video") },
-                onClick = { viewModel.sleepTimer.startEndOfVideo(); expanded = false },
+                onClick = { viewModel.sleepTimer.startEndOfVideo(); setExpanded(false) },
             )
             if (active) {
                 DropdownMenuItem(
                     text = { Text("Cancel timer") },
-                    onClick = { viewModel.sleepTimer.cancel(); expanded = false },
+                    onClick = { viewModel.sleepTimer.cancel(); setExpanded(false) },
                 )
             }
         }

@@ -109,9 +109,14 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /** Explicit user-triggered rescan (pull-to-refresh / toolbar button). */
+    /** Explicit user-triggered rescan (pull-to-refresh / toolbar button) — shows progress. */
     fun rescan() {
         viewModelScope.launch { scanner.scan() }
+    }
+
+    /** Resume-time catch-up for the rare case a background scan was missed; never shows progress. */
+    fun silentRescan() {
+        viewModelScope.launch { scanner.scan(silent = true) }
     }
 
     // --- Query mutations ------------------------------------------------------

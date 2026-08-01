@@ -4,22 +4,20 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -116,6 +114,9 @@ fun PlayerScreen(
     }
     var isScrubbing by remember { mutableStateOf(false) }
     var scrubTargetMs by remember { mutableFloatStateOf(0f) }
+    // True while any control-row menu (speed panel, audio/captions/sleep dropdown,
+    // overflow menu) is open, so auto-hide never yanks the controls away mid-edit.
+    var menusInteracting by remember { mutableStateOf(false) }
 
     var brightnessHud by remember { mutableStateOf<Float?>(null) }
     var volumeHud by remember { mutableStateOf<Float?>(null) }
@@ -131,9 +132,10 @@ fun PlayerScreen(
     var centerFlashToken by remember { mutableIntStateOf(0) }
     var centerFlashPlaying by remember { mutableStateOf(true) }
 
-    // Auto-hide controls and transient HUDs (paused while actively scrubbing).
-    LaunchedEffect(state.controlsVisible, state.isPlaying, isScrubbing) {
-        if (state.controlsVisible && state.isPlaying && !isScrubbing) {
+    // Auto-hide controls and transient HUDs (paused while actively scrubbing or
+    // while any control-row menu is open — never hide out from under an edit).
+    LaunchedEffect(state.controlsVisible, state.isPlaying, isScrubbing, menusInteracting) {
+        if (state.controlsVisible && state.isPlaying && !isScrubbing && !menusInteracting) {
             delay(3_500)
             viewModel.setControlsVisible(false)
         }
@@ -398,6 +400,7 @@ fun PlayerScreen(
                     toast = label
                 },
                 onEnhanceToggled = { label -> toast = label },
+                onInteractingChange = { menusInteracting = it },
                 viewModel = viewModel,
             )
         }
@@ -429,10 +432,17 @@ private fun PlayerControls(
     onScrubFinished: () -> Unit,
     onCropChanged: (String) -> Unit,
     onEnhanceToggled: (String) -> Unit,
+    onInteractingChange: (Boolean) -> Unit,
     viewModel: PlayerViewModel,
 ) {
     val white = Color.White
     var overflowExpanded by remember { mutableStateOf(false) }
+    var speedExpanded by remember { mutableStateOf(false) }
+    var audioExpanded by remember { mutableStateOf(false) }
+    var captionsExpanded by remember { mutableStateOf(false) }
+    var sleepExpanded by remember { mutableStateOf(false) }
+    val anyMenuOpen = overflowExpanded || speedExpanded || audioExpanded || captionsExpanded || sleepExpanded
+    LaunchedEffect(anyMenuOpen) { onInteractingChange(anyMenuOpen) }
 
     AnimatedVisibility(
         visible = state.controlsVisible,
@@ -457,8 +467,21 @@ private fun PlayerControls(
                     maxLines = 1,
                     modifier = Modifier.weight(1f),
                 )
-                CaptionsQuickMenu(viewModel, state, settings, white)
-                AudioQuickMenu(viewModel, state, white)
+                IconButton(onClick = { speedExpanded = !speedExpanded }) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (speedExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color(0x33FFFFFF),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("${formatSpeed(state.speed)}×", color = white, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                CaptionsQuickMenu(viewModel, state, settings, white, onExpandedChange = { captionsExpanded = it })
+                AudioQuickMenu(viewModel, state, white, onExpandedChange = { audioExpanded = it })
                 IconButton(onClick = {
                     viewModel.toggleEnhance()
                     val s = viewModel.state.value
@@ -476,7 +499,7 @@ private fun PlayerControls(
                         tint = if (state.enhance.enabled) MaterialTheme.colorScheme.primary else white,
                     )
                 }
-                SleepQuickMenu(viewModel, white)
+                SleepQuickMenu(viewModel, white, onExpandedChange = { sleepExpanded = it })
                 Box {
                     IconButton(onClick = { overflowExpanded = true }) {
                         Icon(Icons.Filled.MoreVert, "More", tint = white)
@@ -503,13 +526,35 @@ private fun PlayerControls(
                 }
             }
 
-            // Speed: a low-opacity pill showing the current speed, left side below the
-            // title. Tapping it expands into a snap-to-0.5x slider.
-            SpeedControl(
-                speed = state.speed,
-                onSpeedChange = viewModel::setSpeed,
-                modifier = Modifier.padding(start = 12.dp, top = 4.dp),
-            )
+            // Speed panel: slides down from the header when its pill is tapped,
+            // and back up on confirm — never covers more than this one row.
+            AnimatedVisibility(
+                visible = speedExpanded,
+                enter = expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy)) + fadeIn(),
+                exit = shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy)) + fadeOut(),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, top = 4.dp, bottom = 6.dp),
+                ) {
+                    Text(
+                        "${formatSpeed(state.speed)}×",
+                        color = white,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(end = 10.dp),
+                    )
+                    DottedSnapSlider(
+                        value = state.speed,
+                        range = SPEED_RANGE,
+                        step = SPEED_STEP,
+                        onValueChange = viewModel::setSpeed,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { speedExpanded = false }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Filled.Check, "Done", tint = white, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
         }
     }
 
@@ -652,60 +697,6 @@ private fun HoldSpeedHud(value: Float) {
             fraction = fraction,
             modifier = Modifier.padding(top = 8.dp).width(180.dp),
         )
-    }
-}
-
-/** Low-opacity round pill showing the current speed; tap to expand into a snap-to-0.5x slider. */
-@Composable
-private fun SpeedControl(speed: Float, onSpeedChange: (Float) -> Unit, modifier: Modifier = Modifier) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box(modifier = modifier) {
-        AnimatedContent(
-            targetState = expanded,
-            transitionSpec = {
-                (fadeIn(tween(160)) + scaleIn(initialScale = 0.85f))
-                    .togetherWith(fadeOut(tween(120)) + scaleOut(targetScale = 0.85f))
-            },
-            label = "speedControl",
-        ) { isExpanded ->
-            if (!isExpanded) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x33FFFFFF))
-                        .clickable { expanded = true },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("${formatSpeed(speed)}×", color = Color.White, style = MaterialTheme.typography.labelSmall)
-                }
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .background(Color(0x99000000), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                ) {
-                    Text(
-                        "${formatSpeed(speed)}×",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(end = 10.dp),
-                    )
-                    DottedSnapSlider(
-                        value = speed,
-                        range = SPEED_RANGE,
-                        step = SPEED_STEP,
-                        onValueChange = onSpeedChange,
-                        modifier = Modifier.width(150.dp),
-                    )
-                    IconButton(onClick = { expanded = false }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Filled.Check, "Done", tint = Color.White, modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
-        }
     }
 }
 

@@ -39,7 +39,7 @@ class MediaChangeObserver(
             observer,
         )
         scope.launch {
-            changeSignal.debounce(DEBOUNCE_MS).collect { scanner.scan() }
+            changeSignal.debounce(DEBOUNCE_MS).collect { scanner.scan(silent = true) }
         }
     }
 

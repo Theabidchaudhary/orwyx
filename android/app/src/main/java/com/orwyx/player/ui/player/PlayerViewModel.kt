@@ -303,15 +303,18 @@ class PlayerViewModel @Inject constructor(
         _state.value = _state.value.copy(holdSpeedActive = true, holdSpeedValue = HOLD_INITIAL_SPEED)
     }
 
-    /** [normalizedDeltaX] is the horizontal drag delta as a fraction of screen width. */
+    /**
+     * [normalizedDeltaX] is the horizontal drag delta as a fraction of screen
+     * width. The value slides smoothly between 0.5x dots, only locking onto
+     * one when the finger lands close to it (see [magnetSnap]).
+     */
     fun dragHoldSpeed(normalizedDeltaX: Float) {
         holdDragAccum += normalizedDeltaX
         val raw = (HOLD_INITIAL_SPEED + holdDragAccum * HOLD_DRAG_SENSITIVITY)
             .coerceIn(HOLD_SPEED_RANGE.start, HOLD_SPEED_RANGE.endInclusive)
-        val snapped = (Math.round(raw / HOLD_SPEED_STEP) * HOLD_SPEED_STEP)
-            .coerceIn(HOLD_SPEED_RANGE.start, HOLD_SPEED_RANGE.endInclusive)
-        engine.setSpeed(snapped)
-        _state.value = _state.value.copy(holdSpeedValue = snapped)
+        val value = magnetSnap(raw, HOLD_SPEED_STEP).coerceIn(HOLD_SPEED_RANGE.start, HOLD_SPEED_RANGE.endInclusive)
+        engine.setSpeed(value)
+        _state.value = _state.value.copy(holdSpeedValue = value)
     }
 
     fun endHoldSpeed() {

@@ -5,8 +5,10 @@ import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
+import androidx.room.withTransaction
 import com.orwyx.player.core.util.Formatters
 import com.orwyx.player.core.util.MediaFormats
+import com.orwyx.player.data.db.OrwyxDatabase
 import com.orwyx.player.data.db.VideoDao
 import com.orwyx.player.data.db.VideoEntity
 import com.orwyx.player.data.settings.SettingsRepository
@@ -16,7 +18,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -41,6 +45,7 @@ sealed interface ScanState {
 @Singleton
 class MediaScanner @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val database: OrwyxDatabase,
     private val dao: VideoDao,
     private val settings: SettingsRepository,
     private val metadataExtractor: MetadataExtractor,
@@ -48,29 +53,51 @@ class MediaScanner @Inject constructor(
     private val _state = MutableStateFlow<ScanState>(ScanState.Idle)
     val state: StateFlow<ScanState> = _state
 
+    private val scanMutex = Mutex()
+
     /** Limits concurrent MediaExtractor sessions so enrichment never spikes CPU. */
     private val enrichmentSemaphore = Semaphore(2)
 
-    suspend fun scan() = withContext(Dispatchers.IO) {
-        if (_state.value is ScanState.Scanning) return@withContext
-        _state.value = ScanState.Scanning(0)
+    /**
+     * [silent] scans — the background ContentObserver signal, the resume-time
+     * catch-up — never touch [state], so no progress bar ever appears for them;
+     * only an explicit user action (pull-to-refresh, "Rescan library", adding a
+     * folder) shows one. This is how MX Player/VLC read as "always up to date":
+     * the sync itself is invisible.
+     *
+     * The stale-mark/upsert/sweep diff runs inside one Room transaction so the
+     * "videos" table's Flow observers (the folder grid, search results) only
+     * ever see the before/after result — never the intermediate state where
+     * every row is briefly marked stale, which used to blank the whole grid
+     * for a frame before it repopulated.
+     */
+    suspend fun scan(silent: Boolean = false) = withContext(Dispatchers.IO) {
+        if (scanMutex.isLocked) return@withContext
+        scanMutex.withLock {
+            if (!silent) _state.value = ScanState.Scanning(0)
 
-        val prefs = settings.settings.first()
-        val ignored = prefs.ignoredFolders
+            val prefs = settings.settings.first()
+            val ignored = prefs.ignoredFolders
 
-        dao.markAllStale()
-        var found = 0
-        found += scanMediaStore(ignored) { _state.value = ScanState.Scanning(found + it) }
-        for (tree in prefs.safFolders) {
-            found += scanSafTree(Uri.parse(tree), ignored)
-            _state.value = ScanState.Scanning(found)
+            var found = 0
+            var removed = 0
+            database.withTransaction {
+                dao.markAllStale()
+                found += scanMediaStore(ignored) {
+                    if (!silent) _state.value = ScanState.Scanning(found + it)
+                }
+                for (tree in prefs.safFolders) {
+                    found += scanSafTree(Uri.parse(tree), ignored)
+                    if (!silent) _state.value = ScanState.Scanning(found)
+                }
+                removed = dao.sweepStale()
+            }
+            if (!silent) _state.value = ScanState.Done(found, removed)
+            if (!prefs.hasScannedOnce) settings.setHasScannedOnce(true)
+
+            enrichMetadata()
+            if (!silent) _state.value = ScanState.Idle
         }
-        val removed = dao.sweepStale()
-        _state.value = ScanState.Done(found, removed)
-        if (!prefs.hasScannedOnce) settings.setHasScannedOnce(true)
-
-        enrichMetadata()
-        _state.value = ScanState.Idle
     }
 
     private suspend fun scanMediaStore(ignored: Set<String>, onProgress: (Int) -> Unit): Int {
