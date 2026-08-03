@@ -79,7 +79,7 @@
       href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Bebas+Neue&family=Pacifico&family=Oswald:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Caveat:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&family=Archivo:wght@400;500;600;700;800;900&family=Roboto+Mono:wght@300;400;500;700&family=Abril+Fatface&family=Righteous&family=Comfortaa:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Work+Sans:wght@300;400;500;600;700;800;900&display=swap"
       rel="stylesheet"
     />
-    <script src="/assets/orwyx-content.js?v=45" defer></script>
+    <script src="/assets/orwyx-content.js?v=46" defer></script>
     <script src="/scripts.js" defer></script>
     <link rel="icon" href="/assets/logos/favicon.png" type="image/png" />
   </head>
@@ -93,12 +93,14 @@
     <div hidden=""><!--$?--><template id="B:0"></template><!--/$--></div>
     <script>
       /* Registered synchronously here — before any async/defer scripts (Next.js router)
-         can register their own handlers. Capture phase fires before bubble, and
-         document-level capture registered first wins in registration order. */
+         can register their own handlers. Capture phase fires before bubble, and a
+         document-level capture handler registered first wins in registration order.
+         Covers both the injected nav and footer, since Next's global click interception
+         isn't scoped to elements it rendered itself. */
       document.addEventListener('click', function(e) {
         var a = e.target.closest('a[href]');
         if (!a) return;
-        if (!a.closest('[data-orwyx-injected], #orwyx-mobile-menu')) return;
+        if (!a.closest('[data-orwyx-injected], [data-orwyx-ftr], #orwyx-mobile-menu')) return;
         var href = a.href;
         if (!href || href.charAt(0) === '#') return;
         e.preventDefault();
@@ -106,7 +108,34 @@
         window.location.href = href;
       }, true);
 
-      /* Inject header + set favicon after React hydration */
+      /* --- Self-healing header + footer injection ---
+         This page's <body> is fully owned/reconciled by a live Next.js React app, which
+         periodically reconciles body's children and strips out any DOM node it doesn't
+         recognize as its own — including the injected nav/footer, sometimes well after
+         the initial injection. A one-shot injection (or a single delayed retry) isn't
+         enough: this guard re-inserts the nav/footer immediately, every time React
+         removes them, for as long as the page stays open. */
+      var _navHtml = null, _ftrHtml = null;
+
+      function ensureNav() {
+        if (!_navHtml || document.querySelector('[data-orwyx-injected]')) return;
+        var d = document.createElement('div');
+        d.innerHTML = _navHtml;
+        var nav = d.firstElementChild;
+        if (nav) nav.setAttribute('data-orwyx-injected', '1');
+        var frag = document.createDocumentFragment();
+        while (d.firstChild) frag.appendChild(d.firstChild);
+        document.body.insertBefore(frag, document.body.firstChild);
+      }
+
+      function ensureFooter() {
+        if (!_ftrHtml || document.querySelector('[data-orwyx-ftr]')) return;
+        var d = document.createElement('div');
+        d.innerHTML = _ftrHtml;
+        var ftr = d.firstElementChild;
+        if (ftr) { ftr.setAttribute('data-orwyx-ftr', '1'); document.body.appendChild(ftr); }
+      }
+
       window.addEventListener('load', function() {
         /* favicon — override React's injected icon */
         var iconLink = document.querySelector('link[rel="icon"]');
@@ -116,30 +145,21 @@
           fl.rel = 'icon'; fl.href = '/assets/logos/favicon.png'; fl.type = 'image/png';
           document.head.appendChild(fl);
         }
-        if (document.querySelector('nav[data-orwyx-injected]')) return;
-        fetch('/header.html').then(function(r){ return r.text(); }).then(function(html) {
-          var d = document.createElement('div');
-          d.innerHTML = html;
-          var nav = d.firstElementChild;
-          if (nav) nav.setAttribute('data-orwyx-injected', '1');
-          var frag = document.createDocumentFragment();
-          while (d.firstChild) frag.appendChild(d.firstChild);
-          document.body.insertBefore(frag, document.body.firstChild);
-          /* React intercepts clicks via event delegation — capture-phase listener
-             fires first and forces native navigation before React can hijack it. */
-          var injectedNav = document.querySelector('[data-orwyx-injected]');
-          if (injectedNav) {
-            injectedNav.addEventListener('click', function(e) {
-              var a = e.target.closest('a[href]');
-              if (a) {
-                e.preventDefault();
-                e.stopPropagation();
-                window.location.href = a.href;
-              }
-            }, true);
-          }
-        });
+        fetch('/header.html').then(function(r){ return r.text(); }).then(function(html){ _navHtml = html; ensureNav(); });
+        fetch('/footer.html').then(function(r){ return r.text(); }).then(function(html){ _ftrHtml = html; ensureFooter(); });
       });
+
+      /* Persistent guard: whenever React mutates body's children, check (debounced)
+         whether our nav/footer got swept up in the cleanup, and put them back. */
+      var _guardTimer = null;
+      new MutationObserver(function() {
+        if (_guardTimer) return;
+        _guardTimer = setTimeout(function() {
+          _guardTimer = null;
+          ensureNav();
+          ensureFooter();
+        }, 50);
+      }).observe(document.body, { childList: true });
     </script>
     <main>
       <script type="application/ld+json">
@@ -1846,7 +1866,6 @@
       </div>
       <!--$?--><template id="B:1"></template><!--/$-->
     </main>
-    <div id="orwyx-footer"></div>
     <!--$--><!--/$--><!--$--><!--/$-->
     <script>
       requestAnimationFrame(function(){$RT=performance.now()});
@@ -1966,42 +1985,16 @@
       self.__next_f.push([1,"25:\"$20:metadata\"\n"])
     </script>
     <script>
-      /* --- Footer injection --- */
-      function orwyxInjectFtr(html) {
-        if (document.querySelector('[data-orwyx-ftr]')) return;
-        var wrap = document.createElement('div');
-        wrap.innerHTML = html;
-        var ftr = wrap.firstElementChild;
-        ftr.setAttribute('data-orwyx-ftr', '1');
-        var main = document.querySelector('body > main');
-        if (main && main.nextSibling) { document.body.insertBefore(ftr, main.nextSibling); }
-        else { document.body.appendChild(ftr); }
-      }
-      var _ftrHtml = null;
-      fetch('/footer.html').then(function(r){ return r.text(); }).then(function(h){ _ftrHtml = h; orwyxInjectFtr(h); });
-
-      /* --- Guard: if React removes the inline nav, put it back --- */
-      var _navHtml = document.querySelector('nav[data-orwyx-nav]') ? document.querySelector('nav[data-orwyx-nav]').outerHTML : null;
-      function orwyxRestoreNav() {
-        if (document.querySelector('nav[data-orwyx-nav]')) return;
-        if (!_navHtml) return;
-        var wrap = document.createElement('div');
-        wrap.innerHTML = _navHtml;
-        var nav = wrap.firstElementChild;
-        var main = document.querySelector('body > main');
-        if (main) { document.body.insertBefore(nav, main); }
-        else { document.body.prepend(nav); }
-      }
-      setTimeout(function() {
-        if (_ftrHtml && !document.querySelector('[data-orwyx-ftr]')) orwyxInjectFtr(_ftrHtml);
-        orwyxRestoreNav();
-      }, 800);
+      /* Nav + footer injection/healing lives in the <script> right after <body> opens
+         (self-healing against React's body reconciliation). scripts.js's generic
+         inject('orwyx-footer', ...) targets a placeholder div this page no longer has,
+         so it no-ops here — the header/footer of every OTHER page still use it as-is. */
 
       /* --- Fix all CTA button/link clicks (delegated — survives React re-renders) --- */
       document.addEventListener('click', function(e) {
         var el = e.target.closest('button, a');
         if (!el) return;
-        if (el.closest('nav[data-orwyx-injected]') || el.closest('[data-orwyx-ftr]')) return;
+        if (el.closest('nav[data-orwyx-injected]') || el.closest('footer')) return;
         var txt = el.textContent.trim().toLowerCase();
         var isContact = txt.includes('quote') || txt.includes('contact') || txt.includes('book') || txt.includes('start') || txt.includes('call') || txt.includes('message') || txt.includes('partner');
         var isWork = txt.includes('see the work') || txt.includes('portfolio') || txt.includes('project') || txt.includes('case study') || (txt.includes('see') && txt.includes('work'));
@@ -2010,8 +2003,6 @@
         e.stopImmediatePropagation();
         window.location.href = isContact ? '/contact.html' : '/work.html';
       }, true);
-      window._obs = new MutationObserver(function() { orwyxRestoreNav(); });
-      window._obs.observe(document.body, { childList: true, subtree: true });
     </script>
     <script>
     /* Hide the 3 floating hero decorators (Orwyx O circle + 2 floating images) on phone/tablet */
