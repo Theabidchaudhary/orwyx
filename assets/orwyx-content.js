@@ -807,11 +807,11 @@
   }
 
   var LINKS = {
-    "Work": "/work/",
-    "Services": "/services/",
-    "Pricing": "/pricing/",
-    "About": "/about/",
-    "Contact": "/contact/",
+    "Work": "/work.html",
+    "Services": "/services.html",
+    "Pricing": "/pricing.html",
+    "About": "/about.html",
+    "Contact": "/contact.html",
     "Home": "/",
     "Fiverr": BRAND.fiverr,
     "YouTube": BRAND.youtube
@@ -916,7 +916,7 @@
       btn.addEventListener("click", function(e) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        window.location.href = "/contact/";
+        window.location.href = "/contact.html";
       });
     });
   }
@@ -1394,7 +1394,7 @@
       ctaDiv.innerHTML =
         '<p style="font-size:0.65rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:rgba(255,255,255,0.3);margin:0 0 1.5rem">NO DOWNTIME - BOOKING YEAR-ROUND</p>' +
         '<h2 style="font-size:clamp(2.5rem,5vw,4rem);font-weight:800;color:#fff;line-height:1.1;letter-spacing:-0.03em;margin:0 0 2.25rem">Your story deserves<br>more than an edit.</h2>' +
-        '<a href="/contact/" style="display:inline-flex;align-items:center;gap:0.625rem;padding:0.875rem 2rem;border-radius:9999px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;font-size:0.9375rem;font-weight:600;text-decoration:none;letter-spacing:0.01em;transition:background .2s,border-color .2s" onmouseover="this.style.background=\'rgba(255,255,255,0.12)\';this.style.borderColor=\'rgba(255,255,255,0.35)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.07)\';this.style.borderColor=\'rgba(255,255,255,0.18)\'">Start a project</a>';
+        '<a href="/contact.html" style="display:inline-flex;align-items:center;gap:0.625rem;padding:0.875rem 2rem;border-radius:9999px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);color:#fff;font-size:0.9375rem;font-weight:600;text-decoration:none;letter-spacing:0.01em;transition:background .2s,border-color .2s" onmouseover="this.style.background=\'rgba(255,255,255,0.12)\';this.style.borderColor=\'rgba(255,255,255,0.35)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.07)\';this.style.borderColor=\'rgba(255,255,255,0.18)\'">Start a project</a>';
       calSection.appendChild(ctaDiv);
 
       var ctaObs = new MutationObserver(function() {
