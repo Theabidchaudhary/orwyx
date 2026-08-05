@@ -2,6 +2,7 @@ package com.orwyx.player.ui.library
 
 import android.content.Intent
 import android.content.IntentSender
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -44,9 +45,12 @@ sealed interface LibraryEvent {
 }
 
 sealed interface PendingAction {
-    data class Delete(val videoId: Long) : PendingAction
+    data class Delete(val videoIds: List<Long>) : PendingAction
     data class Rename(val videoId: Long, val newTitle: String) : PendingAction
 }
+
+/** Aggregate info for the selection's properties dialog. */
+data class SelectionSummary(val count: Int, val totalSizeBytes: Long, val single: Video?)
 
 /** Everything about a query that is local to one screen (not shared/persisted). */
 private data class LocalQueryState(
@@ -154,10 +158,6 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { repository.setPrivate(video.id, private) }
     }
 
-    fun hideFolder(path: String) {
-        viewModelScope.launch { settingsRepository.toggleHiddenFolder(path) }
-    }
-
     fun share(video: Video) {
         viewModelScope.launch {
             _events.send(LibraryEvent.LaunchShare(fileOperations.shareIntent(video.uri)))
@@ -169,7 +169,7 @@ class LibraryViewModel @Inject constructor(
             when (val result = fileOperations.delete(video.id)) {
                 is FileOpResult.Success -> _events.send(LibraryEvent.Message("Deleted"))
                 is FileOpResult.NeedsConsent -> _events.send(
-                    LibraryEvent.RequestConsent(result.intentSender, PendingAction.Delete(video.id)),
+                    LibraryEvent.RequestConsent(result.intentSender, PendingAction.Delete(listOf(video.id))),
                 )
                 is FileOpResult.Failure -> _events.send(LibraryEvent.Message(result.message))
             }
@@ -196,7 +196,7 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             when (action) {
                 is PendingAction.Delete -> {
-                    fileOperations.confirmDeleted(action.videoId)
+                    fileOperations.confirmDeleted(action.videoIds)
                     _events.send(LibraryEvent.Message("Deleted"))
                 }
                 is PendingAction.Rename -> {
@@ -211,6 +211,132 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.addSafFolder(treeUri)
             scanner.scan()
+        }
+    }
+
+    // --- Multi-select ------------------------------------------------------
+    // Long-press selects instead of opening a per-item menu; a screen is either
+    // selecting folders (home) or videos (inside a folder/search), never both.
+
+    private val _selectedVideos = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedVideos: StateFlow<Set<Long>> = _selectedVideos
+
+    private val _selectedFolders = MutableStateFlow<Set<String>>(emptySet())
+    val selectedFolders: StateFlow<Set<String>> = _selectedFolders
+
+    fun toggleVideoSelection(id: Long) {
+        _selectedVideos.value = _selectedVideos.value.let { if (id in it) it - id else it + id }
+    }
+
+    fun toggleFolderSelection(path: String) {
+        _selectedFolders.value = _selectedFolders.value.let { if (path in it) it - path else it + path }
+    }
+
+    fun clearSelection() {
+        _selectedVideos.value = emptySet()
+        _selectedFolders.value = emptySet()
+    }
+
+    /** Selected videos directly, or every video inside the selected folders. */
+    private suspend fun resolveSelectionVideoIds(): List<Long> {
+        _selectedVideos.value.takeIf { it.isNotEmpty() }?.let { return it.toList() }
+        val folderPaths = _selectedFolders.value
+        if (folderPaths.isEmpty()) return emptyList()
+        return folderPaths
+            .flatMap { path -> repository.videos(LibraryQuery(folderPath = path, includePrivate = true)).first() }
+            .map { it.id }
+    }
+
+    suspend fun selectionSummary(): SelectionSummary {
+        val ids = resolveSelectionVideoIds()
+        val videos = ids.mapNotNull { repository.video(it) }
+        return SelectionSummary(
+            count = videos.size,
+            totalSizeBytes = videos.sumOf { it.sizeBytes },
+            single = videos.singleOrNull(),
+        )
+    }
+
+    fun deleteSelection() {
+        viewModelScope.launch {
+            val ids = resolveSelectionVideoIds()
+            clearSelection()
+            if (ids.isEmpty()) return@launch
+            when (val result = fileOperations.deleteVideos(ids)) {
+                is FileOpResult.Success -> _events.send(LibraryEvent.Message("Deleted"))
+                is FileOpResult.NeedsConsent -> _events.send(
+                    LibraryEvent.RequestConsent(result.intentSender, PendingAction.Delete(ids)),
+                )
+                is FileOpResult.Failure -> _events.send(LibraryEvent.Message(result.message))
+            }
+        }
+    }
+
+    fun moveSelection(destinationTree: Uri) {
+        viewModelScope.launch {
+            val ids = resolveSelectionVideoIds()
+            clearSelection()
+            if (ids.isEmpty()) return@launch
+            when (val result = fileOperations.moveVideos(ids, destinationTree)) {
+                is FileOpResult.Success -> {
+                    _events.send(LibraryEvent.Message("Moved"))
+                    scanner.scan(silent = true)
+                }
+                is FileOpResult.NeedsConsent -> _events.send(
+                    LibraryEvent.RequestConsent(result.intentSender, PendingAction.Delete(ids)),
+                )
+                is FileOpResult.Failure -> _events.send(LibraryEvent.Message(result.message))
+            }
+        }
+    }
+
+    fun copySelection(destinationTree: Uri) {
+        viewModelScope.launch {
+            val ids = resolveSelectionVideoIds()
+            clearSelection()
+            if (ids.isEmpty()) return@launch
+            when (val result = fileOperations.copyVideos(ids, destinationTree)) {
+                is FileOpResult.Success -> {
+                    _events.send(LibraryEvent.Message("Copied"))
+                    scanner.scan(silent = true)
+                }
+                is FileOpResult.NeedsConsent -> Unit // copying never touches an existing MediaStore row
+                is FileOpResult.Failure -> _events.send(LibraryEvent.Message(result.message))
+            }
+        }
+    }
+
+    /** Only valid for a single selected video — the bottom bar hides Rename otherwise. */
+    fun renameSelectedVideo(newTitle: String) {
+        val id = _selectedVideos.value.singleOrNull() ?: return
+        viewModelScope.launch {
+            clearSelection()
+            when (val result = fileOperations.rename(id, newTitle)) {
+                is FileOpResult.Success -> _events.send(LibraryEvent.Message("Renamed"))
+                is FileOpResult.NeedsConsent -> _events.send(
+                    LibraryEvent.RequestConsent(result.intentSender, PendingAction.Rename(id, newTitle)),
+                )
+                is FileOpResult.Failure -> _events.send(LibraryEvent.Message(result.message))
+            }
+        }
+    }
+
+    /** Moves the whole selection to/from the private vault in one tap. */
+    fun togglePrivateForSelection() {
+        viewModelScope.launch {
+            val ids = resolveSelectionVideoIds()
+            clearSelection()
+            if (ids.isEmpty()) return@launch
+            val videos = ids.mapNotNull { repository.video(it) }
+            val makePrivate = videos.any { !it.isPrivate }
+            videos.forEach { repository.setPrivate(it.id, makePrivate) }
+        }
+    }
+
+    fun hideSelectedFolders() {
+        viewModelScope.launch {
+            _selectedFolders.value.forEach { settingsRepository.toggleHiddenFolder(it) }
+            clearSelection()
         }
     }
 }

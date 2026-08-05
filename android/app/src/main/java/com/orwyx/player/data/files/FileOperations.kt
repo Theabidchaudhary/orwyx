@@ -8,6 +8,8 @@ import android.content.IntentSender
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.webkit.MimeTypeMap
+import androidx.documentfile.provider.DocumentFile
 import com.orwyx.player.data.db.VideoDao
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -36,16 +38,25 @@ class FileOperations @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dao: VideoDao,
 ) {
-    suspend fun delete(videoId: Long): FileOpResult = withContext(Dispatchers.IO) {
-        val video = dao.byId(videoId) ?: return@withContext FileOpResult.Failure("Video not found")
-        val uri = Uri.parse(video.uri)
+    suspend fun delete(videoId: Long): FileOpResult = deleteVideos(listOf(videoId))
+
+    /**
+     * Batch delete. On API 30+, [MediaStore.createDeleteRequest] accepts every
+     * URI at once, so selecting 20 videos and deleting them still surfaces a
+     * single system consent dialog instead of one per file.
+     */
+    suspend fun deleteVideos(videoIds: List<Long>): FileOpResult = withContext(Dispatchers.IO) {
+        val entries = videoIds.mapNotNull { id -> dao.byId(id)?.let { id to Uri.parse(it.uri) } }
+        if (entries.isEmpty()) return@withContext FileOpResult.Failure("Nothing to delete")
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && uri.isMediaStoreUri()) {
-                val pending = MediaStore.createDeleteRequest(context.contentResolver, listOf(uri))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && entries.all { it.second.isMediaStoreUri() }) {
+                val pending = MediaStore.createDeleteRequest(context.contentResolver, entries.map { it.second })
                 return@withContext FileOpResult.NeedsConsent(pending.intentSender)
             }
-            context.contentResolver.delete(uri, null, null)
-            dao.delete(videoId)
+            entries.forEach { (id, uri) ->
+                context.contentResolver.delete(uri, null, null)
+                dao.delete(id)
+            }
             FileOpResult.Success
         } catch (e: SecurityException) {
             (e as? RecoverableSecurityException)
@@ -57,8 +68,43 @@ class FileOperations @Inject constructor(
     }
 
     /** Call after the consent dialog returns RESULT_OK to finish a pending delete. */
-    suspend fun confirmDeleted(videoId: Long) = withContext(Dispatchers.IO) {
-        dao.delete(videoId)
+    suspend fun confirmDeleted(videoIds: List<Long>) = withContext(Dispatchers.IO) {
+        videoIds.forEach { dao.delete(it) }
+    }
+
+    /** Copies each video's bytes into [destinationTree]; originals are untouched. */
+    suspend fun copyVideos(videoIds: List<Long>, destinationTree: Uri): FileOpResult = withContext(Dispatchers.IO) {
+        val dest = DocumentFile.fromTreeUri(context, destinationTree)
+            ?: return@withContext FileOpResult.Failure("Can't access destination folder")
+        runCatching {
+            videoIds.forEach { id -> dao.byId(id)?.let { copyOne(it.uri, it.path, dest) } }
+        }.fold(
+            onSuccess = { FileOpResult.Success },
+            onFailure = { FileOpResult.Failure(it.message ?: "Copy failed") },
+        )
+    }
+
+    /** Copies into [destinationTree], then deletes the originals (may still need delete consent). */
+    suspend fun moveVideos(videoIds: List<Long>, destinationTree: Uri): FileOpResult = withContext(Dispatchers.IO) {
+        val dest = DocumentFile.fromTreeUri(context, destinationTree)
+            ?: return@withContext FileOpResult.Failure("Can't access destination folder")
+        val copyFailure = runCatching {
+            videoIds.forEach { id -> dao.byId(id)?.let { copyOne(it.uri, it.path, dest) } }
+        }.exceptionOrNull()
+        if (copyFailure != null) return@withContext FileOpResult.Failure(copyFailure.message ?: "Move failed")
+        deleteVideos(videoIds)
+    }
+
+    private fun copyOne(sourceUri: String, sourcePath: String, dest: DocumentFile) {
+        val name = File(sourcePath).name
+        val extension = name.substringAfterLast('.', "")
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "video/*"
+        val target = dest.createFile(mime, name) ?: error("Couldn't create $name in destination")
+        val input = context.contentResolver.openInputStream(Uri.parse(sourceUri)) ?: error("Couldn't read $name")
+        input.use { source ->
+            val output = context.contentResolver.openOutputStream(target.uri) ?: error("Couldn't write $name")
+            output.use { source.copyTo(it) }
+        }
     }
 
     suspend fun rename(videoId: Long, newTitle: String): FileOpResult = withContext(Dispatchers.IO) {

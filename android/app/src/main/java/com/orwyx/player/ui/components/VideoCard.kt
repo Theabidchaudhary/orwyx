@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -54,11 +57,13 @@ fun VideoCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
 ) {
     if (layout == LibraryLayout.LIST) {
-        VideoListCard(video, fields, onClick, onLongClick, modifier)
+        VideoListCard(video, fields, selected, selectionMode, onClick, onLongClick, modifier)
     } else {
-        VideoGridCard(video, fields, onClick, onLongClick, modifier)
+        VideoGridCard(video, fields, selected, selectionMode, onClick, onLongClick, modifier)
     }
 }
 
@@ -67,6 +72,8 @@ fun VideoCard(
 private fun VideoGridCard(
     video: Video,
     fields: Set<String>,
+    selected: Boolean,
+    selectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -74,10 +81,14 @@ private fun VideoGridCard(
     Column(
         modifier = modifier
             .glassCard()
+            .let { if (selected) it.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)) else it }
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(6.dp),
     ) {
-        Thumbnail(video, fields, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+        Box {
+            Thumbnail(video, fields, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+            if (selectionMode) SelectionMark(selected, Modifier.align(Alignment.TopStart).padding(6.dp))
+        }
 
         Text(
             text = video.title,
@@ -115,6 +126,8 @@ private fun VideoGridCard(
 private fun VideoListCard(
     video: Video,
     fields: Set<String>,
+    selected: Boolean,
+    selectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -124,10 +137,14 @@ private fun VideoListCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
+            .let { if (selected) it.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)) else it }
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(8.dp),
     ) {
-        Thumbnail(video, fields, Modifier.width(120.dp).aspectRatio(16f / 9f))
+        Box {
+            Thumbnail(video, fields, Modifier.width(120.dp).aspectRatio(16f / 9f))
+            if (selectionMode) SelectionMark(selected, Modifier.align(Alignment.TopStart).padding(4.dp))
+        }
         Column(Modifier.padding(start = 12.dp).fillMaxWidth()) {
             Text(
                 text = video.title,
@@ -234,6 +251,20 @@ private fun metadataLine(video: Video, fields: Set<String>): String =
             null
         },
     ).joinToString(" · ")
+
+/** Checked/unchecked circle shown on every card once selection mode is active. */
+@Composable
+fun SelectionMark(selected: Boolean, modifier: Modifier = Modifier) {
+    Icon(
+        if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+        contentDescription = if (selected) "Selected" else "Not selected",
+        tint = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+        modifier = modifier
+            .size(22.dp)
+            .background(Color(0x66000000), CircleShape)
+            .padding(1.dp),
+    )
+}
 
 @Composable
 fun Badge(text: String, modifier: Modifier = Modifier, accent: Boolean = false) {

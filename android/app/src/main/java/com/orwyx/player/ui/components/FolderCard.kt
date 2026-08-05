@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,11 +39,13 @@ fun FolderCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
 ) {
     if (layout == LibraryLayout.GRID) {
-        FolderGridCard(folder, onClick, onLongClick, modifier)
+        FolderGridCard(folder, selected, selectionMode, onClick, onLongClick, modifier)
     } else {
-        FolderListCard(folder, onClick, onLongClick, modifier)
+        FolderListCard(folder, selected, selectionMode, onClick, onLongClick, modifier)
     }
 }
 
@@ -50,6 +53,8 @@ fun FolderCard(
 @Composable
 private fun FolderGridCard(
     folder: VideoFolder,
+    selected: Boolean,
+    selectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -57,6 +62,7 @@ private fun FolderGridCard(
     Column(
         modifier = modifier
             .glassCard()
+            .let { if (selected) it.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)) else it }
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(6.dp),
     ) {
@@ -77,6 +83,7 @@ private fun FolderGridCard(
             Box(modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)) {
                 Badge("${folder.videoCount}")
             }
+            if (selectionMode) SelectionMark(selected, Modifier.align(Alignment.TopStart).padding(6.dp))
         }
         Text(
             text = folder.name,
@@ -98,6 +105,8 @@ private fun FolderGridCard(
 @Composable
 private fun FolderListCard(
     folder: VideoFolder,
+    selected: Boolean,
+    selectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -113,14 +122,24 @@ private fun FolderListCard(
             )
         },
         leadingContent = {
-            Icon(
-                Icons.Filled.Folder,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .padding(4.dp)
-                    .size(32.dp),
-            )
+            Box {
+                Icon(
+                    Icons.Filled.Folder,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .size(32.dp),
+                )
+                if (selectionMode) {
+                    SelectionMark(selected, Modifier.align(Alignment.TopStart))
+                }
+            }
+        },
+        colors = if (selected) {
+            ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+        } else {
+            ListItemDefaults.colors()
         },
         modifier = modifier
             .fillMaxSize()

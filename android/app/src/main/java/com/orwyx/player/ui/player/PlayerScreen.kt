@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -468,17 +469,11 @@ private fun PlayerControls(
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = { speedExpanded = !speedExpanded }) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (speedExpanded) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color(0x33FFFFFF),
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("${formatSpeed(state.speed)}×", color = white, style = MaterialTheme.typography.labelSmall)
-                    }
+                    Text(
+                        "${formatSpeed(state.speed)}×",
+                        color = if (speedExpanded) MaterialTheme.colorScheme.primary else white,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
                 }
                 CaptionsQuickMenu(viewModel, state, settings, white, onExpandedChange = { captionsExpanded = it })
                 AudioQuickMenu(viewModel, state, white, onExpandedChange = { audioExpanded = it })
@@ -533,9 +528,10 @@ private fun PlayerControls(
                 enter = expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy)) + fadeIn(),
                 exit = shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy)) + fadeOut(),
             ) {
+                val sliderWidth = LocalConfiguration.current.screenWidthDp.dp * 0.2f
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 6.dp),
+                    modifier = Modifier.padding(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 6.dp),
                 ) {
                     Text(
                         "${formatSpeed(state.speed)}×",
@@ -548,9 +544,9 @@ private fun PlayerControls(
                         range = SPEED_RANGE,
                         step = SPEED_STEP,
                         onValueChange = viewModel::setSpeed,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.width(sliderWidth),
                     )
-                    IconButton(onClick = { speedExpanded = false }, modifier = Modifier.size(28.dp)) {
+                    IconButton(onClick = { speedExpanded = false }, modifier = Modifier.size(28.dp).padding(start = 6.dp)) {
                         Icon(Icons.Filled.Check, "Done", tint = white, modifier = Modifier.size(16.dp))
                     }
                 }

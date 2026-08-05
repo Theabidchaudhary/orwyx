@@ -8,7 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,7 +28,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,15 +36,12 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -67,7 +63,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.paging.compose.collectAsLazyPagingItems
-import com.orwyx.player.core.util.Formatters
 import com.orwyx.player.data.scanner.ScanState
 import com.orwyx.player.domain.model.LibraryLayout
 import com.orwyx.player.domain.model.VideoFolder
@@ -151,72 +146,115 @@ fun HomeScreen(
     var searching by rememberSaveable { mutableStateOf(false) }
     var showDisplaySettings by rememberSaveable { mutableStateOf(false) }
     var showOverflow by remember { mutableStateOf(false) }
-    var folderActionsFor by remember { mutableStateOf<VideoFolder?>(null) }
+    val selectedFolders by viewModel.selectedFolders.collectAsState()
+    val selectedVideos by viewModel.selectedVideos.collectAsState()
     val resumeVideo = continueWatching.firstOrNull()
+
+    // Folder selection (home grid) and video selection (search results) never
+    // overlap in the UI, but their state lives independently in the
+    // ViewModel — clear both whenever search toggles so a stale selection
+    // from one mode can't leak into the other.
+    LaunchedEffect(searching) { viewModel.clearSelection() }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            TopAppBar(
-                title = {
-                    if (searching) {
-                        OutlinedTextField(
-                            value = query.search,
-                            onValueChange = viewModel::setSearch,
-                            placeholder = { Text("Search your videos") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+            val selectedCount = selectedFolders.size + selectedVideos.size
+            if (selectedCount > 0) {
+                SelectionTopBar(
+                    count = selectedCount,
+                    onClose = viewModel::clearSelection,
+                    extraActions = {
+                        if (selectedFolders.isNotEmpty()) {
+                            IconButton(onClick = viewModel::hideSelectedFolders) {
+                                Icon(Icons.Filled.VisibilityOff, "Hide folder")
+                            }
+                        }
+                        if (selectedVideos.isNotEmpty()) {
+                            IconButton(onClick = viewModel::togglePrivateForSelection) {
+                                Icon(Icons.Filled.Lock, "Private folder")
+                            }
+                        }
+                    },
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        if (searching) {
+                            OutlinedTextField(
+                                value = query.search,
+                                onValueChange = viewModel::setSearch,
+                                placeholder = { Text("Search your videos") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            Text(
+                                "OX Player",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showDisplaySettings = true }) {
+                            Icon(Icons.Filled.Tune, "Sort & view")
+                        }
+                        IconButton(onClick = {
+                            if (searching) viewModel.setSearch("")
+                            searching = !searching
+                        }) { Icon(Icons.Filled.Search, "Search") }
+                        Box {
+                            IconButton(onClick = { showOverflow = true }) {
+                                Icon(Icons.Filled.MoreVert, "More")
+                            }
+                            DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Add folder") },
+                                    leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
+                                    onClick = { showOverflow = false; safLauncher.launch(null) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Rescan library") },
+                                    leadingIcon = { Icon(Icons.Filled.Refresh, null) },
+                                    onClick = { showOverflow = false; viewModel.rescan() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Private folder") },
+                                    leadingIcon = { Icon(Icons.Filled.Lock, null) },
+                                    onClick = { showOverflow = false; onOpenVault() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Settings") },
+                                    leadingIcon = { Icon(Icons.Filled.Settings, null) },
+                                    onClick = { showOverflow = false; onOpenSettings() },
+                                )
+                            }
+                        }
+                    },
+                )
+            }
+        },
+        bottomBar = {
+            if (selectedFolders.isNotEmpty()) {
+                SelectionActionsBar(
+                    viewModel = viewModel,
+                    selectedCount = selectedFolders.size,
+                    showRename = false,
+                    singleFolder = if (selectedFolders.size == 1) {
+                        folders.find { it.path == selectedFolders.first() }
                     } else {
-                        Text(
-                            "OX Player",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showDisplaySettings = true }) {
-                        Icon(Icons.Filled.Tune, "Sort & view")
-                    }
-                    IconButton(onClick = {
-                        if (searching) viewModel.setSearch("")
-                        searching = !searching
-                    }) { Icon(Icons.Filled.Search, "Search") }
-                    Box {
-                        IconButton(onClick = { showOverflow = true }) {
-                            Icon(Icons.Filled.MoreVert, "More")
-                        }
-                        DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
-                            DropdownMenuItem(
-                                text = { Text("Add folder") },
-                                leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
-                                onClick = { showOverflow = false; safLauncher.launch(null) },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Rescan library") },
-                                leadingIcon = { Icon(Icons.Filled.Refresh, null) },
-                                onClick = { showOverflow = false; viewModel.rescan() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Private folder") },
-                                leadingIcon = { Icon(Icons.Filled.Lock, null) },
-                                onClick = { showOverflow = false; onOpenVault() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Settings") },
-                                leadingIcon = { Icon(Icons.Filled.Settings, null) },
-                                onClick = { showOverflow = false; onOpenSettings() },
-                            )
-                        }
-                    }
-                },
-            )
+                        null
+                    },
+                )
+            } else if (selectedVideos.isNotEmpty()) {
+                SelectionActionsBar(viewModel = viewModel, selectedCount = selectedVideos.size, showRename = selectedVideos.size == 1)
+            }
         },
         floatingActionButton = {
             AnimatedVisibility(
-                visible = resumeVideo != null && !searching,
+                visible = resumeVideo != null && !searching && selectedFolders.isEmpty() && selectedVideos.isEmpty(),
                 enter = scaleIn(),
                 exit = scaleOut(),
             ) {
@@ -258,6 +296,12 @@ fun HomeScreen(
                 return@Column
             }
 
+            val folderSelectionMode = selectedFolders.isNotEmpty()
+            val onFolderClick: (VideoFolder) -> Unit = { folder ->
+                if (folderSelectionMode) viewModel.toggleFolderSelection(folder.path) else onOpenFolder(folder.path)
+            }
+            val onFolderLongClick: (VideoFolder) -> Unit = { folder -> viewModel.toggleFolderSelection(folder.path) }
+
             if (folders.isEmpty()) {
                 EmptyState(
                     title = "No folders yet",
@@ -269,8 +313,10 @@ fun HomeScreen(
                         FolderCard(
                             folder = folder,
                             layout = LibraryLayout.LIST,
-                            onClick = { onOpenFolder(folder.path) },
-                            onLongClick = { folderActionsFor = folder },
+                            onClick = { onFolderClick(folder) },
+                            onLongClick = { onFolderLongClick(folder) },
+                            selected = folder.path in selectedFolders,
+                            selectionMode = folderSelectionMode,
                         )
                     }
                 }
@@ -284,8 +330,10 @@ fun HomeScreen(
                         FolderCard(
                             folder = folder,
                             layout = LibraryLayout.GRID,
-                            onClick = { onOpenFolder(folder.path) },
-                            onLongClick = { folderActionsFor = folder },
+                            onClick = { onFolderClick(folder) },
+                            onLongClick = { onFolderLongClick(folder) },
+                            selected = folder.path in selectedFolders,
+                            selectionMode = folderSelectionMode,
                         )
                     }
                 }
@@ -305,64 +353,6 @@ fun HomeScreen(
             onSort = viewModel::setSortBy,
             onDirection = viewModel::setDirection,
             onToggleField = viewModel::toggleField,
-        )
-    }
-
-    folderActionsFor?.let { folder ->
-        FolderActionsSheet(
-            folder = folder,
-            onDismiss = { folderActionsFor = null },
-            onOpen = { onOpenFolder(folder.path) },
-            onHide = { viewModel.hideFolder(folder.path) },
-        )
-    }
-}
-
-/** Long-press actions for a folder: open, properties (path lives only here), hide. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FolderActionsSheet(
-    folder: VideoFolder,
-    onDismiss: () -> Unit,
-    onOpen: () -> Unit,
-    onHide: () -> Unit,
-) {
-    var showProperties by rememberSaveable { mutableStateOf(false) }
-
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        ListItem(
-            headlineContent = { Text(folder.name, style = MaterialTheme.typography.titleMedium) },
-            supportingContent = { Text("${folder.videoCount} videos") },
-        )
-        ListItem(
-            headlineContent = { Text("Open") },
-            modifier = Modifier.fillMaxWidth().clickable { onOpen(); onDismiss() },
-        )
-        ListItem(
-            headlineContent = { Text("Properties") },
-            modifier = Modifier.fillMaxWidth().clickable { showProperties = true },
-        )
-        ListItem(
-            headlineContent = { Text("Hide folder") },
-            modifier = Modifier.fillMaxWidth().clickable { onHide(); onDismiss() },
-        )
-    }
-
-    if (showProperties) {
-        AlertDialog(
-            onDismissRequest = { showProperties = false },
-            title = { Text(folder.name) },
-            text = {
-                Text(
-                    buildString {
-                        appendLine("Path: ${folder.path}")
-                        appendLine("Videos: ${folder.videoCount}")
-                        appendLine("Total size: ${Formatters.fileSize(folder.totalSizeBytes)}")
-                        append("Last added: ${Formatters.date(folder.latestDateAddedMs)}")
-                    },
-                )
-            },
-            confirmButton = { TextButton(onClick = { showProperties = false }) { Text("Close") } },
         )
     }
 }

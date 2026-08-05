@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +42,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.orwyx.player.ui.library.LibraryEventHandler
 import com.orwyx.player.ui.library.LibraryViewModel
+import com.orwyx.player.ui.library.SelectionActionsBar
+import com.orwyx.player.ui.library.SelectionTopBar
 import com.orwyx.player.ui.library.VideoGrid
 
 /**
@@ -66,18 +69,37 @@ fun VaultScreen(
         viewModel.setFolder(null)
     }
 
+    val selected by viewModel.selectedVideos.collectAsState()
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            TopAppBar(
-                title = { Text("Private folder") },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        vaultViewModel.lock()
-                        onBack()
-                    }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                },
-            )
+            if (selected.isNotEmpty()) {
+                SelectionTopBar(
+                    count = selected.size,
+                    onClose = viewModel::clearSelection,
+                    extraActions = {
+                        IconButton(onClick = viewModel::togglePrivateForSelection) {
+                            Icon(Icons.Filled.LockOpen, "Remove from private folder")
+                        }
+                    },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("Private folder") },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            vaultViewModel.lock()
+                            onBack()
+                        }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                    },
+                )
+            }
+        },
+        bottomBar = {
+            if (selected.isNotEmpty()) {
+                SelectionActionsBar(viewModel = viewModel, selectedCount = selected.size, showRename = selected.size == 1)
+            }
         },
     ) { padding ->
         when {
@@ -95,7 +117,6 @@ fun VaultScreen(
                         items = videos,
                         viewModel = viewModel,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        inVault = true,
                     )
                 }
             }

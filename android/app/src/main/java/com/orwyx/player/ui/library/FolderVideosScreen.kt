@@ -53,23 +53,33 @@ fun FolderVideosScreen(
     val settings by viewModel.settings.collectAsState()
     val videos = viewModel.videos.collectAsLazyPagingItems()
     var showDisplaySettings by rememberSaveable { mutableStateOf(false) }
+    val selected by viewModel.selectedVideos.collectAsState()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            TopAppBar(
-                title = { Text(File(folderPath).name) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showDisplaySettings = true }) {
-                        Icon(Icons.Filled.Tune, "Sort & view")
-                    }
-                },
-            )
+            if (selected.isNotEmpty()) {
+                SelectionTopBar(count = selected.size, onClose = viewModel::clearSelection)
+            } else {
+                TopAppBar(
+                    title = { Text(File(folderPath).name) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showDisplaySettings = true }) {
+                            Icon(Icons.Filled.Tune, "Sort & view")
+                        }
+                    },
+                )
+            }
+        },
+        bottomBar = {
+            if (selected.isNotEmpty()) {
+                SelectionActionsBar(viewModel = viewModel, selectedCount = selected.size, showRename = selected.size == 1)
+            }
         },
     ) { padding ->
         Column(Modifier.padding(padding)) {
