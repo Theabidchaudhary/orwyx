@@ -42,9 +42,6 @@ object LibraryQueryBuilder {
 
         when (query.filter) {
             VideoFilter.ALL -> Unit
-            VideoFilter.UHD_4K -> where.append(" AND MIN(widthPx, heightPx) >= 2160")
-            VideoFilter.FHD_1080P -> where.append(" AND MIN(widthPx, heightPx) BETWEEN 1080 AND 1439")
-            VideoFilter.HD_720P -> where.append(" AND MIN(widthPx, heightPx) BETWEEN 720 AND 1079")
             VideoFilter.HDR -> where.append(" AND hdrType != 'NONE'")
             VideoFilter.SDR -> where.append(" AND hdrType = 'NONE'")
             VideoFilter.FAVORITES -> where.append(" AND isFavorite = 1")

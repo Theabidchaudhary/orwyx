@@ -3,7 +3,6 @@ package com.orwyx.player.player
 import android.content.Context
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.Effect
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -118,20 +117,6 @@ class PlayerEngine @Inject constructor(
         p.seekTo((p.currentPosition + if (forward) frameMs else -frameMs).coerceAtLeast(0))
         p.setSeekParameters(SeekParameters.CLOSEST_SYNC)
     }
-
-    /**
-     * Applies (or clears) the enhancement pipeline. Returns false when the device
-     * can't run GL effects, so the UI can disable the toggle gracefully.
-     *
-     * A no-op seek forces the frame processor to re-render the current frame
-     * through the new effect chain immediately — without it the change only
-     * becomes visible after the next natural seek or media transition.
-     */
-    fun setVideoEffects(effects: List<Effect>): Boolean =
-        runCatching {
-            player?.setVideoEffects(effects)
-            player?.let { it.seekTo(it.currentPosition) }
-        }.isSuccess
 
     /** Audio delay requires a pipeline flush to take effect immediately. */
     fun setAudioDelay(delayMs: Long) {

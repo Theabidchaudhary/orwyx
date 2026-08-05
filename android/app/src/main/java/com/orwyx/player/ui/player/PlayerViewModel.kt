@@ -25,7 +25,6 @@ import com.orwyx.player.player.PlayerEngine
 import com.orwyx.player.player.SleepTimer
 import com.orwyx.player.player.SleepTimerState
 import com.orwyx.player.player.audio.AudioFxController
-import com.orwyx.player.player.enhance.EnhancePipeline
 import com.orwyx.player.player.enhance.EnhanceSettings
 import com.orwyx.player.player.subtitle.SubtitleManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -66,7 +65,6 @@ data class PlayerUiState(
     val subtitleDelayMs: Long = 0,
     val audioDelayMs: Long = 0,
     val enhance: EnhanceSettings = EnhanceSettings.OFF,
-    val enhanceSupported: Boolean = true,
     val audioTracks: List<TrackChoice> = emptyList(),
     val textTracks: List<TrackChoice> = emptyList(),
     val error: String? = null,
@@ -431,15 +429,12 @@ class PlayerViewModel @Inject constructor(
 
     // --- Enhancement -----------------------------------------------------------
     // One-tap automatic enhancement: no manual sliders. Tuned constants live in
-    // EnhanceSettings' defaults; toggling just flips the pipeline on/off.
+    // EnhanceSettings' defaults; toggling just flips it on/off. The actual color
+    // filter is applied as a View-level hardware layer in PlayerScreen, not here —
+    // there's no player-engine call needed, so this can never silently no-op.
 
     fun toggleEnhance() {
-        val next = _state.value.enhance.copy(enabled = !_state.value.enhance.enabled)
-        val supported = engine.setVideoEffects(EnhancePipeline.build(next))
-        _state.value = _state.value.copy(
-            enhance = if (supported) next else EnhanceSettings.OFF,
-            enhanceSupported = supported,
-        )
+        _state.value = _state.value.copy(enhance = _state.value.enhance.copy(enabled = !_state.value.enhance.enabled))
     }
 
     // --- Lifecycle ---------------------------------------------------------

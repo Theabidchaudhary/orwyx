@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TextureView instead of the default SurfaceView: SurfaceView renders to an
+  independent window surface that bypasses normal View compositing entirely,
+  so a View-level color filter (used for AI Enhance) would have no visible
+  effect on it. TextureView draws through the regular View hierarchy, so
+  setLayerType(..., paint-with-ColorMatrixColorFilter) actually reaches the
+  decoded video frames.
+-->
+<androidx.media3.ui.PlayerView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/orwyx_player_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    app:surface_type="texture_view" />

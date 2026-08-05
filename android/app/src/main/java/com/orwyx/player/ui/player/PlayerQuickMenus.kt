@@ -2,9 +2,11 @@ package com.orwyx.player.ui.player
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -16,7 +18,6 @@ import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -25,9 +26,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,9 +44,11 @@ import com.orwyx.player.core.util.Formatters
 import com.orwyx.player.data.settings.AppSettings
 import com.orwyx.player.player.SleepTimerState
 import com.orwyx.player.player.audio.AudioFxController
+import com.orwyx.player.ui.components.AppDropdownMenu
+import kotlin.math.roundToInt
 
 /**
- * Compact, icon-anchored panels for audio/captions/sleep — [DropdownMenu]
+ * Compact, icon-anchored panels for audio/captions/sleep — [AppDropdownMenu]
  * auto-sizes to its content and positions itself near the anchor, so these
  * stay small and out of the way instead of covering the video like a full
  * bottom sheet.
@@ -64,7 +69,7 @@ fun AudioQuickMenu(
         IconButton(onClick = { setExpanded(true) }) {
             Icon(Icons.AutoMirrored.Filled.VolumeUp, "Audio", tint = tint)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
+        AppDropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
             if (state.audioTracks.size > 1) {
                 state.audioTracks.forEach { track ->
                     DropdownMenuItem(
@@ -120,7 +125,7 @@ fun CaptionsQuickMenu(
         IconButton(onClick = { setExpanded(true) }) {
             Icon(Icons.Filled.Subtitles, "Captions", tint = if (active) MaterialTheme.colorScheme.primary else tint)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
+        AppDropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
             DropdownMenuItem(
                 text = { Text("Off") },
                 leadingIcon = { if (!active) Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.primary) },
@@ -174,42 +179,64 @@ fun CaptionsQuickMenu(
     }
 }
 
+/** Sleep timer: a dotted snap slider (5-120 min, same look as the speed control) instead of a preset list. */
 @Composable
 fun SleepQuickMenu(viewModel: PlayerViewModel, tint: Color, onExpandedChange: (Boolean) -> Unit = {}) {
     var expanded by remember { mutableStateOf(false) }
     fun setExpanded(value: Boolean) { expanded = value; onExpandedChange(value) }
     val timerState by viewModel.sleepTimerState.collectAsState()
     val active = timerState !is SleepTimerState.Off
+    var minutes by remember { mutableFloatStateOf(30f) }
 
     Box {
         IconButton(onClick = { setExpanded(true) }) {
             Icon(Icons.Filled.Bedtime, "Sleep timer", tint = if (active) MaterialTheme.colorScheme.primary else tint)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
-            (timerState as? SleepTimerState.Running)?.let { running ->
-                Text(
-                    "Pausing in ${Formatters.duration(running.remainingMs)}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-                HorizontalDivider()
-            }
-            listOf(5, 10, 15, 30, 45, 60).forEach { minutes ->
-                DropdownMenuItem(
-                    text = { Text("$minutes min") },
-                    onClick = { viewModel.sleepTimer.start(minutes * 60_000L); setExpanded(false) },
-                )
-            }
-            DropdownMenuItem(
-                text = { Text("End of video") },
-                onClick = { viewModel.sleepTimer.startEndOfVideo(); setExpanded(false) },
-            )
-            if (active) {
-                DropdownMenuItem(
-                    text = { Text("Cancel timer") },
-                    onClick = { viewModel.sleepTimer.cancel(); setExpanded(false) },
-                )
+        AppDropdownMenu(expanded = expanded, onDismissRequest = { setExpanded(false) }) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp).width(230.dp)) {
+                (timerState as? SleepTimerState.Running)?.let { running ->
+                    Text(
+                        "Pausing in ${Formatters.duration(running.remainingMs)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 10.dp),
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${minutes.roundToInt()} min",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(end = 10.dp),
+                    )
+                    DottedSnapSlider(
+                        value = minutes,
+                        range = 0f..120f,
+                        step = 5f,
+                        dotStep = 15f,
+                        onValueChange = { minutes = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                ) {
+                    TextButton(onClick = { viewModel.sleepTimer.startEndOfVideo(); setExpanded(false) }) {
+                        Text("End of video")
+                    }
+                    if (active) {
+                        TextButton(onClick = { viewModel.sleepTimer.cancel(); setExpanded(false) }) {
+                            Text("Cancel")
+                        }
+                    }
+                    IconButton(onClick = {
+                        viewModel.sleepTimer.start(minutes.roundToInt().coerceAtLeast(1) * 60_000L)
+                        setExpanded(false)
+                    }) {
+                        Icon(Icons.Filled.Check, "Start timer", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
         }
     }

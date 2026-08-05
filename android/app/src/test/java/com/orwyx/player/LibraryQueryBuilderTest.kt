@@ -56,11 +56,9 @@ class LibraryQueryBuilderTest {
     @Test
     fun `filters map to indexed predicates`() {
         val hdr = LibraryQueryBuilder.build(LibraryQuery(filter = VideoFilter.HDR), emptySet(), now).sql
-        val uhd = LibraryQueryBuilder.build(LibraryQuery(filter = VideoFilter.UHD_4K), emptySet(), now).sql
         val fav = LibraryQueryBuilder.build(LibraryQuery(filter = VideoFilter.FAVORITES), emptySet(), now).sql
 
         assertThat(hdr).contains("hdrType != 'NONE'")
-        assertThat(uhd).contains("MIN(widthPx, heightPx) >= 2160")
         assertThat(fav).contains("isFavorite = 1")
     }
 

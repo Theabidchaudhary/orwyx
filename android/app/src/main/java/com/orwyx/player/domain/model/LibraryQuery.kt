@@ -51,9 +51,6 @@ enum class VideoCardField(val key: String, val label: String) {
 /** Mutually-exclusive quick filters for videos within a folder. */
 enum class VideoFilter(val label: String) {
     ALL("All"),
-    UHD_4K("4K"),
-    FHD_1080P("1080p"),
-    HD_720P("720p"),
     HDR("HDR"),
     SDR("SDR"),
     FAVORITES("Favorites"),

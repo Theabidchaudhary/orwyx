@@ -3,6 +3,7 @@ package com.orwyx.player.ui.player
 import android.content.Context
 import android.media.AudioManager
 import android.os.SystemClock
+import android.view.LayoutInflater
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -54,7 +55,6 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,9 +85,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.orwyx.player.R
 import com.orwyx.player.core.util.Formatters
 import com.orwyx.player.data.settings.AppSettings
 import com.orwyx.player.data.settings.ZoomMode
+import com.orwyx.player.player.enhance.toColorMatrix
+import com.orwyx.player.ui.components.AppDropdownMenu
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -252,10 +255,13 @@ fun PlayerScreen(
             ),
     ) {
         // Video surface. PlayerView handles the surface lifecycle + resize modes;
-        // pinch zoom/pan are applied as a GPU layer transform on top.
+        // pinch zoom/pan are applied as a GPU layer transform on top. Inflated from
+        // XML (rather than PlayerView(ctx) directly) so it uses a TextureView —
+        // required for the AI Enhance color filter below to actually reach the
+        // decoded frames; a SurfaceView bypasses normal View drawing entirely.
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                (LayoutInflater.from(ctx).inflate(R.layout.player_view, null) as PlayerView).apply {
                     useController = false
                     subtitleView?.visibility = android.view.View.GONE
                     setShutterBackgroundColor(android.graphics.Color.BLACK)
@@ -268,6 +274,14 @@ fun PlayerScreen(
                     ZoomMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                     ZoomMode.STRETCH -> AspectRatioFrameLayout.RESIZE_MODE_FILL
                     ZoomMode.ORIGINAL -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                }
+                if (state.enhance.enabled) {
+                    val paint = android.graphics.Paint().apply {
+                        colorFilter = android.graphics.ColorMatrixColorFilter(state.enhance.toColorMatrix())
+                    }
+                    view.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, paint)
+                } else {
+                    view.setLayerType(android.view.View.LAYER_TYPE_NONE, null)
                 }
             },
             modifier = Modifier
@@ -482,7 +496,6 @@ private fun PlayerControls(
                     val s = viewModel.state.value
                     onEnhanceToggled(
                         when {
-                            !s.enhanceSupported -> "Enhance not supported on this device"
                             s.enhance.enabled -> "AI Enhance on"
                             else -> "AI Enhance off"
                         },
@@ -499,7 +512,7 @@ private fun PlayerControls(
                     IconButton(onClick = { overflowExpanded = true }) {
                         Icon(Icons.Filled.MoreVert, "More", tint = white)
                     }
-                    DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
+                    AppDropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
                         DropdownMenuItem(
                             text = { Text(if (state.repeatState == RepeatState.ONE) "Repeat: one" else if (state.repeatState == RepeatState.ALL) "Repeat: all" else "Repeat: off") },
                             leadingIcon = {
@@ -528,10 +541,11 @@ private fun PlayerControls(
                 enter = expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy)) + fadeIn(),
                 exit = shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy)) + fadeOut(),
             ) {
-                val sliderWidth = LocalConfiguration.current.screenWidthDp.dp * 0.2f
+                val sliderWidth = LocalConfiguration.current.screenWidthDp.dp * 0.28f
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 6.dp),
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp, end = 20.dp, bottom = 6.dp),
                 ) {
                     Text(
                         "${formatSpeed(state.speed)}×",

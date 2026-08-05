@@ -1,54 +1,45 @@
 package com.orwyx.player.player.enhance
 
-import androidx.media3.common.Effect
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.effect.Brightness
-import androidx.media3.effect.Contrast
-import androidx.media3.effect.HslAdjustment
+import android.graphics.ColorMatrix
 
 /**
- * User-facing enhancement toggle (all off by default).
- *
- * Tuned for a clearly visible "auto enhance" look on a single tap — punchier
- * contrast and saturation plus a small lift, similar to a photo app's
- * one-tap auto-enhance. No manual controls are exposed; these constants are
+ * User-facing "AI Enhance" toggle: a single tap boosts contrast, saturation,
+ * and brightness. No manual controls are exposed; these tuned constants are
  * the whole feature.
+ *
+ * This is applied as a hardware-layer [ColorMatrix] filter directly on the
+ * player's rendered [android.view.View] (see [toColorMatrix] and its use in
+ * PlayerScreen), not through Media3's GPU video-effects pipeline. That GPU
+ * pipeline requires routing frames through a VideoFrameProcessor, which some
+ * devices/codecs silently don't support — which was the actual reason an
+ * earlier version of this feature never visibly changed anything. A
+ * View-level color filter has no codec dependency: it just recolors whatever
+ * pixels already landed on screen, so it works unconditionally.
  */
 data class EnhanceSettings(
     val enabled: Boolean = false,
-    val contrastBoost: Float = 0.35f, // -1..1
-    val colorBoost: Float = 32f, // saturation delta, -100..100
-    val brightnessLift: Float = 0.05f, // -1..1
-    val skinToneWarmth: Float = 4f, // hue-band saturation lift
+    val contrast: Float = 1.18f,
+    val saturation: Float = 1.4f,
+    val brightnessOffset: Float = 10f,
 ) {
     companion object {
         val OFF = EnhanceSettings(enabled = false)
     }
 }
 
-/**
- * Real-time enhancement pipeline built on Media3's GPU effect framework.
- *
- * Every effect runs as a GL shader on the video path (zero CPU-side frame
- * copies). [com.orwyx.player.player.PlayerEngine.setVideoEffects] reports
- * whether the device accepted the pipeline; on failure the UI disables the
- * toggle rather than degrading playback.
- *
- * Extension points (same GlEffect mechanism, add as custom shaders):
- * unsharp-mask sharpening, bilateral denoise, debanding dither, and NPU/GPU
- * super-resolution where the vendor exposes it.
- */
-@UnstableApi
-object EnhancePipeline {
-
-    fun build(settings: EnhanceSettings): List<Effect> {
-        if (!settings.enabled) return emptyList()
-        return listOf(
-            Contrast(settings.contrastBoost.coerceIn(-1f, 1f)),
-            Brightness(settings.brightnessLift.coerceIn(-1f, 1f)),
-            HslAdjustment.Builder()
-                .adjustSaturation(settings.colorBoost.coerceIn(-100f, 100f))
-                .build(),
-        )
-    }
+/** Builds the combined contrast+brightness+saturation matrix for this setting. */
+fun EnhanceSettings.toColorMatrix(): ColorMatrix {
+    val c = contrast
+    val translate = (1 - c) * 127.5f + brightnessOffset
+    val contrastAndBrightness = ColorMatrix(
+        floatArrayOf(
+            c, 0f, 0f, 0f, translate,
+            0f, c, 0f, 0f, translate,
+            0f, 0f, c, 0f, translate,
+            0f, 0f, 0f, 1f, 0f,
+        ),
+    )
+    val saturationMatrix = ColorMatrix().apply { setSaturation(saturation) }
+    contrastAndBrightness.postConcat(saturationMatrix)
+    return contrastAndBrightness
 }

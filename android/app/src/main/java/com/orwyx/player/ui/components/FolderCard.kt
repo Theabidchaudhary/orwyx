@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.Icon
@@ -59,10 +60,13 @@ private fun FolderGridCard(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Grid cards read as tiles, not full cards — half the usual corner radius keeps them
+    // from looking overly rounded/pillowy at this smaller size.
+    val gridShape = RoundedCornerShape(12.dp)
     Column(
         modifier = modifier
-            .glassCard()
-            .let { if (selected) it.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)) else it }
+            .glassCard(gridShape)
+            .let { if (selected) it.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), gridShape) else it }
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(6.dp),
     ) {
@@ -70,7 +74,7 @@ private fun FolderGridCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(MaterialTheme.shapes.medium)
+                .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {

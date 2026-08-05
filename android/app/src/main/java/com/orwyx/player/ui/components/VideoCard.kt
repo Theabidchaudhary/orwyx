@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,15 +79,18 @@ private fun VideoGridCard(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Grid cards read as tiles, not full cards — half the usual corner radius keeps them
+    // from looking overly rounded/pillowy at this smaller size.
+    val gridShape = RoundedCornerShape(12.dp)
     Column(
         modifier = modifier
-            .glassCard()
-            .let { if (selected) it.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)) else it }
+            .glassCard(gridShape)
+            .let { if (selected) it.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), gridShape) else it }
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(6.dp),
     ) {
         Box {
-            Thumbnail(video, fields, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+            Thumbnail(video, fields, Modifier.fillMaxWidth().aspectRatio(16f / 9f), shape = RoundedCornerShape(8.dp))
             if (selectionMode) SelectionMark(selected, Modifier.align(Alignment.TopStart).padding(6.dp))
         }
 
@@ -177,10 +181,15 @@ private fun VideoListCard(
 }
 
 @Composable
-private fun Thumbnail(video: Video, fields: Set<String>, modifier: Modifier = Modifier) {
+private fun Thumbnail(
+    video: Video,
+    fields: Set<String>,
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialTheme.shapes.medium,
+) {
     Box(
         modifier = modifier
-            .clip(MaterialTheme.shapes.medium)
+            .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
         if (VideoCardField.THUMBNAIL.key in fields) {

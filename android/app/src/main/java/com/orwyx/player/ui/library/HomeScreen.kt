@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -66,6 +65,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.orwyx.player.data.scanner.ScanState
 import com.orwyx.player.domain.model.LibraryLayout
 import com.orwyx.player.domain.model.VideoFolder
+import com.orwyx.player.ui.components.AppDropdownMenu
 import com.orwyx.player.ui.components.DisplayMode
 import com.orwyx.player.ui.components.DisplaySettingsSheet
 import com.orwyx.player.ui.components.EmptyState
@@ -209,7 +209,7 @@ fun HomeScreen(
                             IconButton(onClick = { showOverflow = true }) {
                                 Icon(Icons.Filled.MoreVert, "More")
                             }
-                            DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
+                            AppDropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
                                 DropdownMenuItem(
                                     text = { Text("Add folder") },
                                     leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },

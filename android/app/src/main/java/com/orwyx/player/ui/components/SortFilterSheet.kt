@@ -96,13 +96,13 @@ fun DisplaySettingsSheet(
                     onClick = { onLayout(LibraryLayout.LIST) },
                     shape = SegmentedButtonDefaults.itemShape(0, 2),
                     icon = { Icon(Icons.Filled.ViewList, null) },
-                ) { Text("List") }
+                ) { Text("List", modifier = Modifier.padding(horizontal = 6.dp)) }
                 SegmentedButton(
                     selected = layout == LibraryLayout.GRID,
                     onClick = { onLayout(LibraryLayout.GRID) },
                     shape = SegmentedButtonDefaults.itemShape(1, 2),
                     icon = { Icon(Icons.Filled.GridView, null) },
-                ) { Text("Grid") }
+                ) { Text("Grid", modifier = Modifier.padding(horizontal = 6.dp)) }
             }
 
             HorizontalDivider()
@@ -130,14 +130,14 @@ fun DisplaySettingsSheet(
                     selected = direction == SortDirection.ASCENDING,
                     onClick = { onDirection(SortDirection.ASCENDING) },
                     shape = SegmentedButtonDefaults.itemShape(0, 2),
-                    icon = { Icon(Icons.Filled.ArrowUpward, null) },
-                ) { Text("A to Z") }
+                    icon = { Icon(Icons.Filled.ArrowDownward, null) },
+                ) { Text("A to Z", modifier = Modifier.padding(horizontal = 6.dp)) }
                 SegmentedButton(
                     selected = direction == SortDirection.DESCENDING,
                     onClick = { onDirection(SortDirection.DESCENDING) },
                     shape = SegmentedButtonDefaults.itemShape(1, 2),
-                    icon = { Icon(Icons.Filled.ArrowDownward, null) },
-                ) { Text("Z to A") }
+                    icon = { Icon(Icons.Filled.ArrowUpward, null) },
+                ) { Text("Z to A", modifier = Modifier.padding(horizontal = 6.dp)) }
             }
 
             if (mode == DisplayMode.VIDEOS) {

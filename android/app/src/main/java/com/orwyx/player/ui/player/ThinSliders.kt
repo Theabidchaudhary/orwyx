@@ -122,9 +122,10 @@ fun magnetSnap(raw: Float, step: Float, threshold: Float = step * 0.12f): Float 
 }
 
 /**
- * A smooth-sliding control across [range] with a tick dot at every [step] and
- * a small magnetic snap when the finger lands close to one — used for
- * playback speed controls.
+ * A smooth-sliding control across [range] that magnet-snaps to [step]
+ * increments, with tick dots drawn every [dotStep] (defaults to [step]) —
+ * separate so a fine drag/snap granularity doesn't force a cramped row of
+ * dots when the range is wide (e.g. sleep-timer minutes).
  */
 @Composable
 fun DottedSnapSlider(
@@ -133,8 +134,9 @@ fun DottedSnapSlider(
     step: Float,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    dotStep: Float = step,
 ) {
-    val stepCount = ((range.endInclusive - range.start) / step).roundToInt()
+    val dotCount = ((range.endInclusive - range.start) / dotStep).roundToInt()
 
     fun snap(fraction: Float): Float {
         val raw = range.start + fraction.coerceIn(0f, 1f) * (range.endInclusive - range.start)
@@ -178,8 +180,13 @@ fun DottedSnapSlider(
             modifier = Modifier.fillMaxWidth().align(Alignment.CenterStart),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            repeat(stepCount + 1) {
-                Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0x99FFFFFF)))
+            repeat(dotCount + 1) { i ->
+                val dotValue = range.start + i * dotStep
+                // Whole-number dots (1x, 2x, ...) read as the "main" stops; the
+                // in-between dots are de-emphasized rather than uniform.
+                val isWhole = kotlin.math.abs(dotValue - dotValue.roundToInt()) < 0.001f
+                val dotSize = if (isWhole) 8.dp else 4.dp
+                Box(Modifier.size(dotSize).clip(CircleShape).background(Color(0x99FFFFFF)))
             }
         }
         Box(

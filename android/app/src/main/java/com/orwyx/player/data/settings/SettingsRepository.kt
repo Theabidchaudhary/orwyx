@@ -51,7 +51,7 @@ data class AppSettings(
     // Display (global: shared by the folder list and every folder's video list)
     val librarySortBy: SortBy = SortBy.DATE,
     val libraryDirection: SortDirection = SortDirection.DESCENDING,
-    val libraryLayout: LibraryLayout = LibraryLayout.GRID,
+    val libraryLayout: LibraryLayout = LibraryLayout.LIST,
     val videoCardFields: Set<String> = VideoCardField.DEFAULT_ENABLED,
     // Subtitles
     val subtitleAutoLoad: Boolean = true,
@@ -132,7 +132,7 @@ class SettingsRepository @Inject constructor(
                 safFolders = p[Keys.SAF_FOLDERS] ?: emptySet(),
                 librarySortBy = p.enum(Keys.LIBRARY_SORT_BY, SortBy.DATE),
                 libraryDirection = p.enum(Keys.LIBRARY_DIRECTION, SortDirection.DESCENDING),
-                libraryLayout = p.enum(Keys.LIBRARY_LAYOUT, LibraryLayout.GRID),
+                libraryLayout = p.enum(Keys.LIBRARY_LAYOUT, LibraryLayout.LIST),
                 videoCardFields = p[Keys.VIDEO_CARD_FIELDS] ?: VideoCardField.DEFAULT_ENABLED,
                 subtitleAutoLoad = p[Keys.SUB_AUTO_LOAD] ?: true,
                 subtitlePreferredLanguage = p[Keys.SUB_LANGUAGE] ?: "en",
