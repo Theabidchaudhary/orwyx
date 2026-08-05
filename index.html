@@ -136,6 +136,13 @@
         if (ftr) { ftr.setAttribute('data-orwyx-ftr', '1'); document.body.appendChild(ftr); }
       }
 
+      /* Fetch immediately — do NOT gate on window 'load'. 'load' only fires once every
+         resource on the page (webfonts, Cookiebot, Calendly preconnects, analytics) has
+         finished, which can lag well behind the page being usable. fetch() itself doesn't
+         block parsing, so there's no cost to starting it as early as possible. */
+      fetch('/header.html').then(function(r){ return r.text(); }).then(function(html){ _navHtml = html; ensureNav(); });
+      fetch('/footer.html').then(function(r){ return r.text(); }).then(function(html){ _ftrHtml = html; ensureFooter(); });
+
       window.addEventListener('load', function() {
         /* favicon — override React's injected icon */
         var iconLink = document.querySelector('link[rel="icon"]');
@@ -145,8 +152,6 @@
           fl.rel = 'icon'; fl.href = '/assets/logos/favicon.png'; fl.type = 'image/png';
           document.head.appendChild(fl);
         }
-        fetch('/header.html').then(function(r){ return r.text(); }).then(function(html){ _navHtml = html; ensureNav(); });
-        fetch('/footer.html').then(function(r){ return r.text(); }).then(function(html){ _ftrHtml = html; ensureFooter(); });
       });
 
       /* Persistent guard: whenever React mutates body's children, check (debounced)
